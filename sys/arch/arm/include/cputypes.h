@@ -212,6 +212,8 @@
 #define CPU_ID_AMPERE1		0xc00fac30
 #define CPU_ID_AMPERE1A		0xc00fac40
 
+#define CPU_ID_FIREFLY      0x70000000
+
 /*
  * Chip-specific errata. These defines are intended to be
  * booleans used within if statements. When an appropriate
@@ -269,5 +271,8 @@
 #define CPU_ID_ARM_88SV581X_V6	0x410fb760 /* Marvell Sheeva 88SV581x v6 Core */
 #define CPU_ID_ARM_88SV581X_V7	0x413fc080 /* Marvell Sheeva 88SV581x v7 Core */
 #define CPU_ID_ARM_88SV584X_V6	0x410fb020 /* Marvell Sheeva 88SV584x v6 Core */
+
+#define CPU_ID_FIREFLY_LITTLE   0x700f3030
+#define CPU_ID_FIREFLY_BIG      0x700f6610
 
 #endif /* _ARM_CPUTYPES_H_ */

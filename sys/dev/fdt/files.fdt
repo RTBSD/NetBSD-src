@@ -156,6 +156,10 @@ file	dev/fdt/dwc2_fdt.c			dwc2_fdt
 attach	xhci at fdt with dwc3_fdt
 file	dev/fdt/dwc3_fdt.c			dwc3_fdt
 
+# Generic USB3 XHCI
+attach	xhci at fdt with xhci_fdt
+file	dev/fdt/generic_xhci_fdt.c  xhci_fdt
+
 # Designware SD/MMC
 attach	dwcmmc at fdt with dwcmmc_fdt
 file	dev/fdt/dwcmmc_fdt.c			dwcmmc_fdt

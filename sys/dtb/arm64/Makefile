@@ -8,5 +8,6 @@ SUBDIR+=	broadcom
 SUBDIR+=	freescale
 SUBDIR+=	nvidia
 SUBDIR+=	rockchip
+SUBDIR+=	firefly
 
 .include <bsd.subdir.mk>

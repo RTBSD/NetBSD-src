@@ -114,6 +114,7 @@ const struct impltab implids[] = {
 	{ CPU_ID_FARADAY,	"Faraday Technology Corporation"	},
 	{ CPU_ID_INTEL,		"Intel Corporation"			},
 	{ CPU_ID_AMPERE,	"Ampere"				},
+	{ CPU_ID_FIREFLY,   "Firefly"				},
 };
 
 #define FIELDNAME(_bitpos, _bitwidth, _name)	\

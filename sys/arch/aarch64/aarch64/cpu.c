@@ -217,6 +217,8 @@ const struct cpuidtab cpuids[] = {
 	{ CPU_ID_APPLE_M1_FIRESTORM & CPU_PARTMASK, "M1 Firestorm", "Apple", "Apple Silicon" },
 	{ CPU_ID_AMPERE1 & CPU_PARTMASK, "Ampere-1", "Ampere", "v8.6-A+" },
 	{ CPU_ID_AMPERE1A & CPU_PARTMASK, "Ampere-1A", "Ampere", "v8.6-A+" },
+	{ CPU_ID_FIREFLY_LITTLE & CPU_PARTMASK, "Firefly-L", "Arm", "v8-A" },
+	{ CPU_ID_FIREFLY_BIG & CPU_PARTMASK, "Firefly-B", "Arm", "v8-A" },
 };
 
 static void

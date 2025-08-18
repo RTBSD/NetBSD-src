@@ -209,3 +209,5 @@
 ./boot/dtb/rockchip/rk3399-sapphire.dtb                      dtb-base-boot  dtb
 ./boot/dtb/rockchip/rk3399pro-rock-pi-n10.dtb                dtb-base-boot  dtb
 ./boot/dtb/rockchip/rk3568-evb1-v10.dtb                      dtb-base-boot  dtb
+./boot/dtb/firefly                                           dtb-base-boot  dtb
+./boot/dtb/firefly/firefly_pi_v2.dtb                         dtb-base-boot  dtb
