@@ -526,7 +526,9 @@ ieee80211_crypto_getmcastkey(struct ieee80211com *ic,
  * If an error is encountered NULL is returned.  The caller is required
  * to provide a node reference and pullup the ethernet header in the
  * first mbuf.
- */
+ */ // encapsulates an outbound data frame con-
+// tained within the mbuf chain m from the interface ic. The argument ni is
+// a reference to the destination node.
 struct mbuf *
 ieee80211_encap(struct ieee80211com *ic, struct mbuf *m,
 	struct ieee80211_node *ni)
@@ -707,6 +709,9 @@ ieee80211_encap(struct ieee80211com *ic, struct mbuf *m,
 	IEEE80211_NODE_STAT(ni, tx_data);
 	IEEE80211_NODE_STAT_ADD(ni, tx_bytes, datalen);
 
+    //  If the function is successful, the mbuf chain is updated with the 802.11
+    //  frame header prepended, and a pointer to the head of the chain is
+    //  returned.  If an error occurs, NULL is returned.
 	return m;
 
 bad:
@@ -1001,7 +1006,7 @@ bad:
 
 /*
  * Add a supported rates element id to a frame.
- */
+ */ // is used to add the rate set element *rs to the frame frm. 
 u_int8_t *
 ieee80211_add_rates(u_int8_t *frm, const struct ieee80211_rateset *rs)
 {
@@ -1011,14 +1016,15 @@ ieee80211_add_rates(u_int8_t *frm, const struct ieee80211_rateset *rs)
 	nrates = rs->rs_nrates;
 	if (nrates > IEEE80211_RATE_SIZE)
 		nrates = IEEE80211_RATE_SIZE;
-	*frm++ = nrates;
+	*frm++ = nrates; // add the rate set element
 	memcpy(frm, rs->rs_rates, nrates);
-	return frm + nrates;
+	return frm + nrates; // A pointer to the location in the buffer
+    // after the addition of the rate set is returned.
 }
 
 /*
  * Add an extended supported rates element id to a frame.
- */
+ */ // used to add the extended rate set element *rs to the frame frm.
 u_int8_t *
 ieee80211_add_xrates(u_int8_t *frm, const struct ieee80211_rateset *rs)
 {
@@ -1032,7 +1038,8 @@ ieee80211_add_xrates(u_int8_t *frm, const struct ieee80211_rateset *rs)
 		memcpy(frm, rs->rs_rates + IEEE80211_RATE_SIZE, nrates);
 		frm += nrates;
 	}
-	return frm;
+	return frm; // A pointer to the location in the
+    // buffer after the addition of the rate set is returned.
 }
 
 /* 
@@ -1407,7 +1414,9 @@ ieee80211_send_probereq(struct ieee80211_node *ni,
  * Send a management frame.  The node is for the destination (or ic_bss
  * when in station mode).  Nodes other than ic_bss have their reference
  * count bumped to reflect our use for an indeterminant time.
- */
+ */ // transmits a management frame on the
+// interface ic to the destination node ni of type type.
+// arg specifies either a sequence number for authentication operations
 int
 ieee80211_send_mgmt(struct ieee80211com *ic, struct ieee80211_node *ni,
 	int type, int arg)
@@ -1496,6 +1505,9 @@ ieee80211_send_mgmt(struct ieee80211com *ic, struct ieee80211_node *ni,
 		    ic->ic_bss->ni_esslen);
 
 		/* rates */
+		// ieee80211_add_rates is typically used
+     	// when constructing management frames from within the software 802.11
+     	// stack.
 		frm = ieee80211_add_rates(frm, &ni->ni_rates);
 
 		/* variable */
@@ -1530,7 +1542,9 @@ ieee80211_send_mgmt(struct ieee80211com *ic, struct ieee80211_node *ni,
 		if (ic->ic_curmode == IEEE80211_MODE_11G)
 			frm = ieee80211_add_erp(frm, ic);
 
-		/* xrates */
+		/* xrates */ // is typically
+     	// used when constructing management frames from within the software 802.11
+     	// stack in 802.11g mode.
 		frm = ieee80211_add_xrates(frm, &ni->ni_rates);
 
 		/* wme */

@@ -99,6 +99,8 @@ static void	rtwn_attach(device_t, device_t, void *);
 static int	rtwn_detach(device_t, int);
 static int	rtwn_activate(device_t, enum devact);
 
+// device	rtwn: ifnet, arp, wlan, firmload
+// attach	rtwn at pci
 CFATTACH_DECL_NEW(rtwn, sizeof(struct rtwn_softc), rtwn_match,
     rtwn_attach, rtwn_detach, rtwn_activate);
 
@@ -312,12 +314,12 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 	/*
 	 * Setup the 802.11 device.
 	 */
-	ic->ic_ifp = ifp;
+	ic->ic_ifp = ifp; // underlying struct ifnet pointer
 	ic->ic_phytype = IEEE80211_T_OFDM;	/* Not only, but not used. */
 	ic->ic_opmode = IEEE80211_M_STA;	/* Default to BSS mode. */
 	ic->ic_state = IEEE80211_S_INIT;
 
-	/* Set device capabilities. */
+	/* Set device capabilities. */ // device capability flags
 	ic->ic_caps =
 	    IEEE80211_C_MONITOR |	/* Monitor mode supported. */
 	    IEEE80211_C_IBSS |		/* IBSS mode supported */
@@ -360,12 +362,14 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 	memcpy(ifp->if_xname, device_xname(sc->sc_dev), IFNAMSIZ);
 
 	if_initialize(ifp);
+	// ieee80211com is used to register a device to the ieee80211 
+	// from the device driver by calling ieee80211_ifattach
 	ieee80211_ifattach(ic);
 	/* Use common softint-based if_input */
 	ifp->if_percpuq = if_percpuq_create(ifp);
 	if_register(ifp);
 
-	/* override default methods */
+	/* override default methods */ // function callbacks
 	ic->ic_newassoc = rtwn_newassoc;
 	ic->ic_reset = rtwn_reset;
 	ic->ic_wme.wme_update = rtwn_wme_update;
@@ -373,8 +377,11 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 	/* Override state transition machine. */
 	sc->sc_newstate = ic->ic_newstate;
 	ic->ic_newstate = rtwn_newstate;
+	// init media data, install device-indepent helper func invoked by ifmedia framework
+	//	when user changes or queries media options
 	ieee80211_media_init(ic, rtwn_media_change, ieee80211_media_status);
 
+	// data-link type
 	bpf_attach2(ifp, DLT_IEEE802_11_RADIO,
 	    sizeof(struct ieee80211_frame) + IEEE80211_RADIOTAP_HDRLEN,
 	    &sc->sc_drvbpf);
@@ -412,6 +419,8 @@ rtwn_detach(device_t self, int flags)
 		pmf_device_deregister(self);
 		ifp->if_flags &= ~(IFF_RUNNING | IFF_OACTIVE);
 		bpf_detach(ifp);
+		// If a device is detached, the ieee80211 layer 
+		//  can be notified with the call ieee80211_ifdetach.
 		ieee80211_ifdetach(ic);
 		if_detach(ifp);
 	}
@@ -1840,6 +1849,7 @@ rtwn_tx(struct rtwn_softc *sc, struct mbuf *m, struct ieee80211_node *ni)
 	type = wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
 
 	if (wh->i_fc[1] & IEEE80211_FC1_WEP) {
+		// WEP crypto
 		k = ieee80211_crypto_encap(ic, ni, m);
 		if (k == NULL)
 			return ENOBUFS;
@@ -1990,6 +2000,9 @@ rtwn_tx(struct rtwn_softc *sc, struct mbuf *m, struct ieee80211_node *ni)
 	data->m = m;
 	data->ni = ni;
 
+    //  When the information is available, usually immediately before a link-
+    //  layer transmission or after a receive, the driver copies it to the bpf
+    //  layer using the bpf_mtap2() function.
 	if (__predict_false(sc->sc_drvbpf != NULL)) {
 		struct rtwn_tx_radiotap_header *tap = &sc->sc_txtap;
 
@@ -1999,6 +2012,7 @@ rtwn_tx(struct rtwn_softc *sc, struct mbuf *m, struct ieee80211_node *ni)
 		if (wh->i_fc[1] & IEEE80211_FC1_WEP)
 			tap->wt_flags |= IEEE80211_RADIOTAP_F_WEP;
 
+		// copy radiotap to bpf layer
 		bpf_mtap2(sc->sc_drvbpf, tap, sc->sc_txtap_len, m, BPF_D_OUT);
 	}
 
@@ -2108,6 +2122,7 @@ rtwn_start(struct ifnet *ifp)
 
 		bpf_mtap(ifp, m, BPF_D_OUT);
 
+		// prepare and encapsulates the output data frame
 		if ((m = ieee80211_encap(ic, m, ni)) == NULL) {
 			ieee80211_free_node(ni);
 			if_statinc(ifp, if_oerrors);
@@ -2116,7 +2131,7 @@ rtwn_start(struct ifnet *ifp)
 sendit:
 		bpf_mtap3(ic->ic_rawbpf, m, BPF_D_OUT);
 
-		if (rtwn_tx(sc, m, ni) != 0) {
+		if (rtwn_tx(sc, m, ni) != 0) { // frame in mbuf is able to tx
 			ieee80211_free_node(ni);
 			if_statinc(ifp, if_oerrors);
 			continue;
@@ -2131,7 +2146,8 @@ sendit:
 
 static void
 rtwn_watchdog(struct ifnet *ifp)
-{
+{ // called from a driver's if_watchdog routine, to perform periodic cleanup of 
+// state within software 802.11 stack
 	struct rtwn_softc *sc = ifp->if_softc;
 	struct ieee80211com *ic = &sc->sc_ic;
 

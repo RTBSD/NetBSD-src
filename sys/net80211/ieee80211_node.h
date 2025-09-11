@@ -90,6 +90,9 @@ struct ieee80211com;
  * state.  This is done by overriding the ic_node_* methods in
  * the ieee80211com structure.
  */
+// A node represents another entity in the wireless network. 
+// It is usually a base station when operating in BSS (basic service set (BSS)) mode, 
+// but can also represent entities in an ad-hoc network.
 struct ieee80211_node {
 	struct ieee80211com	*ni_ic;
 	struct ieee80211_node_table *ni_table;

@@ -185,8 +185,8 @@ ieee80211_ifattach(struct ieee80211com *ic)
 	ieee80211_init();
 #endif /* __NetBSD__ */
 
-	ether_ifattach(ifp, ic->ic_myaddr);
-	bpf_attach2(ifp, DLT_IEEE802_11,
+	ether_ifattach(ifp, ic->ic_myaddr); // ethernet attachment
+	bpf_attach2(ifp, DLT_IEEE802_11, // bpf attachment
 	    sizeof(struct ieee80211_frame_addr4), &ic->ic_rawbpf);
 
 	ieee80211_crypto_attach(ic);
@@ -290,8 +290,8 @@ ieee80211_ifdetach(struct ieee80211com *ic)
 
 	IEEE80211_BEACON_LOCK_DESTROY(ic);
 
-	bpf_detach(ifp);
-	ether_ifdetach(ifp);
+	bpf_detach(ifp); // bpf detachment
+	ether_ifdetach(ifp); // ethernet detachment
 }
 
 /*

@@ -132,6 +132,11 @@ struct ieee80211com {
 	enum ieee80211_state	ic_state;	/* 802.11 state */
 	enum ieee80211_protmode	ic_protmode;	/* 802.11g protection mode */
 	enum ieee80211_roamingmode ic_roaming;	/* roaming mode */
+	// A list of all the nodes seen by a certain device is kept in 
+	// 	the struct ieee80211com instance in the field ic_sta, 
+	// and can be manipulated with the helper functions, The functions include, 
+	// for example, methods to scan for nodes, iterate through the nodelist 
+	// and functionality for maintaining the network structure.
 	struct ieee80211_node_table ic_sta;	/* stations/neighbors */
 	u_int32_t		*ic_aid_bitmap;	/* association id map */
 	u_int16_t		ic_max_aid;
@@ -302,10 +307,14 @@ void	ieee80211_media_init_with_lock(struct ieee80211com *,
 struct ieee80211com *ieee80211_find_vap(const u_int8_t mac[IEEE80211_ADDR_LEN]);
 int	ieee80211_media_change(struct ifnet *);
 void	ieee80211_media_status(struct ifnet *, struct ifmediareq *);
+// These functions are typically invoked by drivers in response to requests
+//     for information or to change settings from the userland.
+//	implements ioctls such as key management for wireless devices.
 int	ieee80211_ioctl(struct ieee80211com *, u_long, void *);
+// legacy interface for getting and setting 802.11 interface attributes
 int	ieee80211_cfgget(struct ieee80211com *, u_long, void *);
 int	ieee80211_cfgset(struct ieee80211com *, u_long, void *);
-void	ieee80211_watchdog(struct ieee80211com *);
+void	ieee80211_watchdog(struct ieee80211com *); // periodic work
 int	ieee80211_rate2media(struct ieee80211com *, int,
 		enum ieee80211_phymode);
 int	ieee80211_media2rate(int);

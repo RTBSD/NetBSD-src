@@ -58,7 +58,21 @@
  * The radio capture header precedes the 802.11 header.
  *
  * Note well: all radiotap fields are little-endian.
- */
+ */ // Radiotap capture fields are in little-endian byte order.
+// The ieee80211_radiotap definitions provide a device-independent bpf(4)
+//     attachment for the capture of information about 802.11 traffic which is
+//     not part of the 802.11 frame structure.
+// Radiotap was designed to balance the desire for a capture format that
+//     conserved CPU and memory bandwidth on embedded systems, with the desire
+//     for a hardware-independent, extensible format that would support the
+//     diverse capabilities of virtually all 802.11 radios.
+//  These considerations led radiotap to settle on a format consisting of a
+//     standard preamble followed by an extensible bitmap indicating the pres-
+//     ence of optional capture fields.
+//  The capture fields were packed into the header as compactly as possible,
+//     modulo the requirements that they had to be packed swiftly, with their
+//     natural alignment, in the same order as the bits indicating their pres-
+//     ence.
 struct ieee80211_radiotap_header {
 	uint8_t	it_version;		/* Version 0. Only increases
 					 * for drastic changes,

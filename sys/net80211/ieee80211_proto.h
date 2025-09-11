@@ -76,6 +76,8 @@ int	ieee80211_send_mgmt(struct ieee80211com *, struct ieee80211_node *,
 		int, int);
 int	ieee80211_classify(struct ieee80211com *, struct mbuf *,
 		struct ieee80211_node *);
+//  These functions handle the encapsulation and transmission of 802.11
+// 		frames within the software 802.11 stack.
 struct mbuf *ieee80211_encap(struct ieee80211com *, struct mbuf *,
 		struct ieee80211_node *);
 struct mbuf *ieee80211_get_rts(struct ieee80211com *,

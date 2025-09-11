@@ -69,6 +69,10 @@
 #define RTWN_LED_LINK	0
 #define RTWN_LED_DATA	1
 
+//  A device driver implementing radiotap typically defines a structure
+//  embedding an instance of struct ieee80211_radiotap_header at the begin-
+//  ning, with subsequent fields naturally aligned, and in the appropriate
+//  order. 
 struct rtwn_rx_radiotap_header {
 	struct ieee80211_radiotap_header wr_ihdr;
 	uint8_t		wr_flags;
@@ -78,6 +82,8 @@ struct rtwn_rx_radiotap_header {
 	uint8_t		wr_dbm_antsignal;
 };
 
+//	Also, a driver defines a macro to set the bits of the it_present
+//  bitmap to indicate which fields exist and are filled in by the driver.
 #define RTWN_RX_RADIOTAP_PRESENT			\
 	(1 << IEEE80211_RADIOTAP_FLAGS |		\
 	 1 << IEEE80211_RADIOTAP_RATE |			\
@@ -146,6 +152,8 @@ struct rtwn_host_cmd_ring {
 struct rtwn_softc {
 	device_t			sc_dev;
 	struct ethercom			sc_ec;
+	// The way to describe an ieee80211 device 
+	// to the ieee80211 layer is by using a struct ieee80211com
 	struct ieee80211com		sc_ic;
 	int				(*sc_newstate)(struct ieee80211com *,
 					    enum ieee80211_state, int);

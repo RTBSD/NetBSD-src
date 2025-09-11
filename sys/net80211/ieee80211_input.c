@@ -313,7 +313,7 @@ ieee80211_input_data(struct ieee80211com *ic, struct mbuf **mp,
 
 	/*
 	 * Finally, strip the 802.11 header.
-	 */
+	 */ // typically called from within ieee80211_input
 	m = ieee80211_decap(m, hdrspace);
 	if (m == NULL) {
 		/* don't count Null data frames as errors */
@@ -453,6 +453,7 @@ ieee80211_input_management(struct ieee80211com *ic, struct mbuf **mp,
 	}
 
 	bpf_mtap3(ic->ic_rawbpf, m, BPF_D_IN);
+	// ieee80211_recv_mgmt typically called from within ieee80211_input
 	(*ic->ic_recv_mgmt)(ic, m, ni, subtype, rssi, rstamp);
 	m_freem(m);
 
@@ -504,10 +505,18 @@ ieee80211_input_control(struct ieee80211com *ic, struct mbuf *m,
  * any units so long as values have consistent units and higher values
  * mean ``better signal''.  The receive timestamp is currently not used
  * by the 802.11 layer.
- */
+ */ // takes an mbuf chain m containing a com-
+//  plete 802.11 frame from the driver ic and passes it to the software
+//  802.11 stack for input processing.
+// ni argument specifies an instance of struct ieee80211_node representing the
+//     node from which the frame was received
+// rssi and stamp are
+//     typically derived from on-card data structures; they are used for record-
+//     ing the signal strength and time received of the frame respectively.
 int
-ieee80211_input(struct ieee80211com *ic, struct mbuf *m,
-	struct ieee80211_node *ni, int rssi, u_int32_t rstamp)
+ieee80211_input(struct ieee80211com *ic /* frame from the driver ic */, struct mbuf *m /* mbuf chain */,
+	struct ieee80211_node *ni, /* node from which the frame was received */
+	int rssi /* signal strength */, u_int32_t rstamp /* time received */)
 {
 #define	SEQ_LEQ(a,b)	((int)((a)-(b)) <= 0)
 #define	HAS_SEQ(type)	((type & 0x4) == 0)
@@ -930,6 +939,10 @@ ieee80211_deliver_data(struct ieee80211com *ic,
 	return;
 }
 
+// performs decapsulation of the 802.11 frame
+//      in the mbuf chain m received by the device ic, taking the form of the
+//      802.11 address fields into account; the structure of 802.11 addresses
+//      vary according to the intended source and destination of the frame.
 static struct mbuf *
 ieee80211_decap(struct mbuf *m, int hdrlen)
 {
@@ -3024,7 +3037,7 @@ ieee80211_recv_mgmt_disassoc(struct ieee80211com *ic, struct mbuf *m0,
 #undef IEEE80211_VERIFY_ELEMENT
 
 /* -------------------------------------------------------------------------- */
-
+// performs input processing for 802.11 management frames
 void
 ieee80211_recv_mgmt(struct ieee80211com *ic, struct mbuf *m0,
     struct ieee80211_node *ni, int subtype, int rssi, u_int32_t rstamp)

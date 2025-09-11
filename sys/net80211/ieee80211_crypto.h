@@ -178,6 +178,13 @@ void	ieee80211_crypto_register(const struct ieee80211_cipher *);
 void	ieee80211_crypto_unregister(const struct ieee80211_cipher *);
 int	ieee80211_crypto_available(u_int cipher);
 
+// Crypto support enables the encryption and decryption of the network frames. 
+// It provides a framework for multiple encryption methods such as WEP 
+// and null crypto. 
+//  Crypto keys are mostly managed through the ioctl interface and inside the 
+// ieee80211 layer, and the only time drivers need to worry about them is in 
+// the send routine when they must test for an encapsulation requirement and 
+// call ieee80211_crypto_encap if necessary.
 struct ieee80211_key *ieee80211_crypto_encap(struct ieee80211com *,
 		struct ieee80211_node *, struct mbuf *);
 struct ieee80211_key *ieee80211_crypto_decap(struct ieee80211com *,
