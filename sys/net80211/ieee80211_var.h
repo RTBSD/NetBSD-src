@@ -93,6 +93,8 @@ struct ieee80211_aclator;
 
 #define	IEEE80211_PS_MAX_QUEUE	50	/* maximum saved packets */
 
+// The way to describe an ieee80211 device to the ieee80211 layer is by using a struct ieee80211com
+// 	It is used to register a device to the ieee80211 from the device driver by calling ieee80211_ifattach
 struct ieee80211com {
 	SLIST_ENTRY(ieee80211com) ic_next;
 	struct ifnet		*ic_ifp;	/* associated device */

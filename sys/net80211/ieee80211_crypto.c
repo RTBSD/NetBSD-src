@@ -161,7 +161,8 @@ dev_key_set(struct ieee80211com *ic, const struct ieee80211_key *key,
 
 /*
  * Setup crypto support.
- */
+ */ // initializes crypto support for the
+// interface ic.  The default is null crypto.
 void
 ieee80211_crypto_attach(struct ieee80211com *ic)
 {
@@ -178,7 +179,7 @@ ieee80211_crypto_attach(struct ieee80211com *ic)
 	/*
 	 * Initialize the driver key support routines to noop entries.
 	 * This is useful especially for the cipher test modules.
-	 */
+	 */ // null crypto
 	cs->cs_key_alloc = null_key_alloc;
 	cs->cs_key_set = null_key_set;
 	cs->cs_key_delete = null_key_delete;
@@ -534,10 +535,16 @@ ieee80211_crypto_setkey(struct ieee80211com *ic, struct ieee80211_key *key,
  * should pass back to the caller the updated pointer to avoid
  * use-after-frees. This can be done by changing the argument to be **m,
  * but many drivers will have to be changed accordingly.
- */
+ */ // encapsulates the packet supplied in
+//  mbuf m0, with the crypto headers given the for node ni.  Software encryp-
+//  tion is possibly performed.  In case of no specified key for ni or multi-
+//  cast traffic, the default key for the interface ic is used for encapsula-
+//  tion.  The key is returned in the case of successful encapsulation, oth-
+//  erwise NULL is returned.
 struct ieee80211_key *
-ieee80211_crypto_encap(struct ieee80211com *ic, struct ieee80211_node *ni,
-    struct mbuf *m)
+ieee80211_crypto_encap(struct ieee80211com *ic, 
+	struct ieee80211_node *ni, /* crypto headers given the for node ni */
+    struct mbuf *m /* packet tobe encapsulates */)
 {
 	struct ieee80211_key *k;
 	struct ieee80211_frame *wh;
@@ -586,7 +593,7 @@ ieee80211_crypto_encap(struct ieee80211com *ic, struct ieee80211_node *ni,
 	hdr = mtod(m, u_int8_t *);
 	memmove(hdr, hdr + cip->ic_header, hdrlen);
 
-	return (cip->ic_encap(k, m, keyid<<6) ? k : NULL);
+	return (cip->ic_encap(k, m, keyid<<6) ? k : NULL); // The key is returned in the case of successful encapsulation
 }
 
 #define	IEEE80211_WEP_HDRLEN	(IEEE80211_WEP_IVLEN + IEEE80211_WEP_KIDLEN)

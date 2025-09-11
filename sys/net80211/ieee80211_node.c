@@ -109,7 +109,7 @@ MALLOC_DEFINE(M_80211_NODE, "80211node", "802.11 node state");
 void
 ieee80211_node_attach(struct ieee80211com *ic)
 {
-
+	// memory allocation callbacks
 	ic->ic_node_alloc = node_alloc;
 	ic->ic_node_free = node_free;
 	ic->ic_node_cleanup = node_cleanup;
@@ -126,6 +126,8 @@ ieee80211_node_attach(struct ieee80211com *ic)
 	ic->ic_set_tim = ieee80211_set_tim;
 }
 
+// initialises the ic_bss node ele-
+//     ment of the interface ic during ieee80211_media_init(9)
 void
 ieee80211_node_lateattach(struct ieee80211com *ic)
 {
@@ -187,6 +189,9 @@ ieee80211_node_lateattach(struct ieee80211com *ic)
 	ic->ic_auth = ieee80211_authenticator_get(ic->ic_bss->ni_authmode);
 }
 
+// destroys all node database state
+//  associated with the interface ic, and is usually called during device
+//  detach.
 void
 ieee80211_node_detach(struct ieee80211com *ic)
 {
@@ -288,9 +293,12 @@ ieee80211_reset_scan(struct ieee80211com *ic)
 
 /*
  * Begin an active scan.
- */
+ */ // initialises the node database in
+//  preparation of a scan for an access point on the interface ic and begins
+//  the scan.
 void
-ieee80211_begin_scan(struct ieee80211com *ic, int reset)
+ieee80211_begin_scan(struct ieee80211com *ic /* which interface need to scan */, 
+	int reset /* 1 if a previously built node list should be cleared */)
 {
 	ic->ic_scan.nt_scangen++;
 
@@ -312,13 +320,13 @@ ieee80211_begin_scan(struct ieee80211com *ic, int reset)
 	 * Clear scan state and flush any previously seen AP's.
 	 */
 	ieee80211_reset_scan(ic);
-	if (reset)
+	if (reset) // drop previous node searched
 		ieee80211_free_allnodes(&ic->ic_scan);
 
 	ic->ic_flags |= IEEE80211_F_SCAN;
 
 	/* Scan the next channel. */
-	ieee80211_next_scan(ic);
+	ieee80211_next_scan(ic); // inform ieee80211 layer that next channel should be scanned
 }
 
 /*
@@ -338,27 +346,31 @@ ieee80211_next_scan(struct ieee80211com *ic)
 	ic->ic_flags_ext &= ~IEEE80211_FEXT_PROBECHAN;
 
 	chan = ic->ic_curchan;
-	do {
+	do { // scan channel by channel
 		if (++chan > &ic->ic_channels[IEEE80211_CHAN_MAX])
 			chan = &ic->ic_channels[0];
 		if (isset(ic->ic_chan_scan, ieee80211_chan2ieee(ic, chan))) {
+			// mark this channel as scanned
 			clrbit(ic->ic_chan_scan, ieee80211_chan2ieee(ic, chan));
 			IEEE80211_DPRINTF(ic, IEEE80211_MSG_SCAN,
 			    "%s: chan %d->%d\n", __func__,
 			    ieee80211_chan2ieee(ic, ic->ic_curchan),
 			    ieee80211_chan2ieee(ic, chan));
-			ic->ic_curchan = chan;
+			ic->ic_curchan = chan; // update current channel
 			/*
 			 * XXX drivers should do this as needed,
 			 * XXX for now maintain compatibility
-			 */
+			 */ // which mode ? 802.11n/g or others, get its speed
 			ic->ic_bss->ni_rates =
 				ic->ic_sup_rates[ieee80211_chan2mode(ic, chan)];
-			ieee80211_new_state(ic, IEEE80211_S_SCAN, -1);
+			ieee80211_new_state(ic, IEEE80211_S_SCAN, -1); // set state as scan
 			return 1;
 		}
-	} while (chan != ic->ic_curchan);
+	} while (chan != ic->ic_curchan); // exit when no more channel to be scan
 
+	// called by ieee80211_next_scan() when
+	//      the state machine has performed a full cycle of scanning on all available
+	//      radio channels.
 	ieee80211_end_scan(ic);
 	return 0;
 }
@@ -399,6 +411,8 @@ copy_bss(struct ieee80211_node *nbss, const struct ieee80211_node *obss)
 	/* XXX statistics? */
 }
 
+/* sets up the net80211-specific portion of an interface's softc, ic, 
+for use in IBSS mode. */
 void
 ieee80211_create_ibss(struct ieee80211com* ic, struct ieee80211_channel *chan)
 {
@@ -722,7 +736,10 @@ ieee80211_end_scan(struct ieee80211com *ic)
 	/*
 	 * Automatic sequencing; look for a candidate and
 	 * if found join the network.
-	 */
+	 */ // will inspect the node
+    //  cache associated with the interface ic for suitable access points found
+    //  during scanning, and associate with one, should the parameters of the
+    //  node match those of the configuration requested.
 	/* NB: unlocked read should be ok */
 	if (TAILQ_FIRST(&nt->nt_node) == NULL) {
 		IEEE80211_DPRINTF(ic, IEEE80211_MSG_SCAN,
@@ -764,6 +781,7 @@ notfound:
 
 	IEEE80211_NODE_LOCK(nt);
 	TAILQ_FOREACH(ni, &nt->nt_node, ni_list) {
+		// try to matching SSIDs
 		if (ieee80211_match_bss(ic, ni) == 0) {
 			if (selbs == NULL)
 				selbs = ni;
@@ -772,12 +790,12 @@ notfound:
 		}
 	}
 	if (selbs != NULL)		/* NB: grab ref while dropping lock */
-		(void)ieee80211_ref_node(selbs);
+		(void)ieee80211_ref_node(selbs); // ref_cnt + 1
 	IEEE80211_NODE_UNLOCK(nt);
 
 	if (selbs == NULL)
 		goto notfound;
-	if (!ieee80211_sta_join(ic, selbs)) {
+	if (!ieee80211_sta_join(ic, selbs)) { // find matched SSID and join
 		ieee80211_free_node(selbs);
 		goto notfound;
 	}
@@ -875,7 +893,7 @@ ieee80211_sta_join(struct ieee80211com *ic, struct ieee80211_node *selbs)
 	ieee80211_wme_initparams(ic);
 
 	if (ic->ic_opmode == IEEE80211_M_STA)
-		ieee80211_new_state(ic, IEEE80211_S_AUTH, -1);
+		ieee80211_new_state(ic, IEEE80211_S_AUTH, -1); // next stage is authenticate
 	else
 		ieee80211_new_state(ic, IEEE80211_S_RUN, -1);
 	return 1;
@@ -1063,8 +1081,12 @@ ieee80211_setup_node(struct ieee80211_node_table *nt,
 	IEEE80211_NODE_UNLOCK(nt);
 }
 
+// allocates an instance of struct
+//  ieee80211_node for a node having the MAC address macaddr, and associates
+//  it with the node table nt.
 struct ieee80211_node *
-ieee80211_alloc_node(struct ieee80211_node_table *nt, const u_int8_t *macaddr)
+ieee80211_alloc_node(struct ieee80211_node_table *nt, /* node table associated */
+					 const u_int8_t *macaddr /* who's mac addr */ )
 {
 	struct ieee80211com *ic = nt->nt_ic;
 	struct ieee80211_node *ni;
@@ -1074,7 +1096,8 @@ ieee80211_alloc_node(struct ieee80211_node_table *nt, const u_int8_t *macaddr)
 		ieee80211_setup_node(nt, ni, macaddr);
 	else
 		ic->ic_stats.is_rx_nodealloc++;
-	return ni;
+	return ni; // If the allocation is successful, the node
+    // structure is initialised by ieee80211_setup_node()
 }
 
 /*
@@ -1113,6 +1136,8 @@ ieee80211_tmp_node(struct ieee80211com *ic, const u_int8_t *macaddr)
 	return ni;
 }
 
+// create a node database entry for the BSSID macaddr
+//     associated with the note table nt.
 struct ieee80211_node *
 ieee80211_dup_bss(struct ieee80211_node_table *nt, const u_int8_t *macaddr)
 {
@@ -1134,7 +1159,7 @@ ieee80211_dup_bss(struct ieee80211_node_table *nt, const u_int8_t *macaddr)
 	} else {
 		ic->ic_stats.is_rx_nodealloc++;
 	}
-	return ni;
+	return ni; // node is ok
 }
 
 static struct ieee80211_node *
@@ -1153,7 +1178,10 @@ _ieee80211_find_node(struct ieee80211_node_table *nt,
 
 	hash = IEEE80211_NODE_HASH(macaddr);
 	LIST_FOREACH(ni, &nt->nt_hash[hash], ni_hash) {
-		if (IEEE80211_ADDR_EQ(ni->ni_macaddr, macaddr)) {
+		// If the entry is
+     	//	found, its reference count is incremented, and a pointer to the node is
+     	//	returned;
+		if (IEEE80211_ADDR_EQ(ni->ni_macaddr, macaddr)) { // check if macaddr matched
 			ieee80211_ref_node(ni);	/* mark referenced */
 #ifdef IEEE80211_DEBUG_REFCNT
 			IEEE80211_DPRINTF(nt->nt_ic, IEEE80211_MSG_NODE,
@@ -1183,6 +1211,8 @@ ieee80211_find_node(struct ieee80211_node_table *nt, const u_int8_t *macaddr)
 	struct ieee80211_node *ni;
 
 	IEEE80211_NODE_LOCK(nt);
+	// iterate through the node table
+    // nt, searching for a node entry which matches macaddr.
 	ni = _ieee80211_find_node(nt, macaddr);
 	IEEE80211_NODE_UNLOCK(nt);
 	return ni;
@@ -2101,7 +2131,9 @@ IEEE80211_DPRINTF(ic, IEEE80211_MSG_POWER, "[%s] discard frame, age %u\n", ether
 }
 
 void
-ieee80211_iterate_nodes(struct ieee80211_node_table *nt, ieee80211_iter_func *f, void *arg)
+ieee80211_iterate_nodes(struct ieee80211_node_table *nt, /* iterate over all nodes in table nt */
+	ieee80211_iter_func *f, /* user-defined callback func */
+	void *arg) /* user-supplied arg */
 {
 	struct ieee80211_node *ni;
 	u_int gen;

@@ -228,11 +228,18 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 
 	pci_aprint_devinfo(pa, NULL);
 
-	callout_init(&sc->scan_to, 0);
-	callout_setfunc(&sc->scan_to, rtwn_next_scan, sc);
-	callout_init(&sc->calib_to, 0);
-	callout_setfunc(&sc->calib_to, rtwn_calib_to, sc);
+	// callout, execute a function
+    // after a specified length of time
 
+    //  The callout facility provides a mechanism to execute a function at a
+    //  given time.  The timer is based on the hardclock timer which ticks hz
+    //  times per second.  The function is called at softclock interrupt level.
+	callout_init(&sc->scan_to, 0);
+	callout_setfunc(&sc->scan_to, rtwn_next_scan, sc); // scan timeout
+	callout_init(&sc->calib_to, 0);
+	callout_setfunc(&sc->calib_to, rtwn_calib_to, sc); // calib timeout
+
+	// Register a software interrupt, priority is SOFTINT_NET
 	sc->sc_soft_ih = softint_establish(SOFTINT_NET, rtwn_softintr, sc);
 	sc->init_task = softint_establish(SOFTINT_NET, rtwn_init_task, sc);
 
@@ -255,6 +262,7 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 	}
 	intrstr = pci_intr_string(sc->sc_pc, sc->sc_pihp[0], intrbuf,
 	    sizeof(intrbuf));
+	// intr handle is rtwn_intr
 	sc->sc_ih = pci_intr_establish_xname(sc->sc_pc, sc->sc_pihp[0], IPL_NET,
 	    rtwn_intr, sc, device_xname(self));
 	if (sc->sc_ih == NULL) {
@@ -316,8 +324,8 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 	 */
 	ic->ic_ifp = ifp; // underlying struct ifnet pointer
 	ic->ic_phytype = IEEE80211_T_OFDM;	/* Not only, but not used. */
-	ic->ic_opmode = IEEE80211_M_STA;	/* Default to BSS mode. */
-	ic->ic_state = IEEE80211_S_INIT;
+	ic->ic_opmode = IEEE80211_M_STA;	/* Default to BSS mode. */ // station mode
+	ic->ic_state = IEEE80211_S_INIT; // init state
 
 	/* Set device capabilities. */ // device capability flags
 	ic->ic_caps =
@@ -339,44 +347,59 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 		ic->ic_sup_mcs[i] = 0xff;
 #endif
 
-	/* Set supported .11b and .11g rates. */
+	/* Set supported .11b and .11g rates. */ // supported speed rate
 	ic->ic_sup_rates[IEEE80211_MODE_11B] = ieee80211_std_rateset_11b;
 	ic->ic_sup_rates[IEEE80211_MODE_11G] = ieee80211_std_rateset_11g;
 
 	/* Set supported .11b and .11g channels (1 through 14). */
 	for (i = 1; i <= 14; i++) {
+		// setup channels freq
 		ic->ic_channels[i].ic_freq =
 		    ieee80211_ieee2mhz(i, IEEE80211_CHAN_2GHZ);
+		// setup channels attributes
 		ic->ic_channels[i].ic_flags =
 		    IEEE80211_CHAN_CCK | IEEE80211_CHAN_OFDM |
 		    IEEE80211_CHAN_DYN | IEEE80211_CHAN_2GHZ;
 	}
 
-	ifp->if_softc = sc;
+	ifp->if_softc = sc; // backpointer to driver-private device instance
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
+	// callback to initialize and  bring  up the hardware
 	ifp->if_init = rtwn_init;
+	// callback to process interface-related ioctl requests
 	ifp->if_ioctl = rtwn_ioctl;
+	// callback to start queued output on the interface
 	ifp->if_start = rtwn_start;
+	// callback to perform periodic work on the interface
 	ifp->if_watchdog = rtwn_watchdog;
+	// send queue is ready
 	IFQ_SET_READY(&ifp->if_snd);
+	// name this interface
 	memcpy(ifp->if_xname, device_xname(sc->sc_dev), IFNAMSIZ);
 
+	// init common net interface
 	if_initialize(ifp);
 	// ieee80211com is used to register a device to the ieee80211 
 	// from the device driver by calling ieee80211_ifattach
+
+	// ieee80211_ifattach must be called
+    // before using any of the ieee80211 functions which need to store driver
+    // state across invocations.
 	ieee80211_ifattach(ic);
 	/* Use common softint-based if_input */
 	ifp->if_percpuq = if_percpuq_create(ifp);
 	if_register(ifp);
 
 	/* override default methods */ // function callbacks
+	// in station mode, Update driver/device state for association to a new	AP
 	ic->ic_newassoc = rtwn_newassoc;
+	// ?? reset ifnet
 	ic->ic_reset = rtwn_reset;
 	ic->ic_wme.wme_update = rtwn_wme_update;
 
 	/* Override state transition machine. */
 	sc->sc_newstate = ic->ic_newstate;
-	ic->ic_newstate = rtwn_newstate;
+	ic->ic_newstate = rtwn_newstate; // state machine callback
 	// init media data, install device-indepent helper func invoked by ifmedia framework
 	//	when user changes or queries media options
 	ieee80211_media_init(ic, rtwn_media_change, ieee80211_media_status);
@@ -386,6 +409,7 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 	    sizeof(struct ieee80211_frame) + IEEE80211_RADIOTAP_HDRLEN,
 	    &sc->sc_drvbpf);
 
+	// sizeof radiotap
 	sc->sc_rxtap_len = sizeof(sc->sc_rxtapu);
 	sc->sc_rxtap.wr_ihdr.it_len = htole16(sc->sc_rxtap_len);
 	sc->sc_rxtap.wr_ihdr.it_present = htole32(RTWN_RX_RADIOTAP_PRESENT);
@@ -487,6 +511,8 @@ rtwn_alloc_rx_list(struct rtwn_softc *sc)
 	int i, error = 0;
 
 	/* Allocate Rx descriptors. */
+	//  Allocates a DMA handle and initializes it according to the param-
+	//  eters provided.
 	error = bus_dmamap_create(sc->sc_dmat, size, 1, size, 0, BUS_DMA_NOWAIT,
 		&rx_ring->map);
 	if (error != 0) {
@@ -496,6 +522,7 @@ rtwn_alloc_rx_list(struct rtwn_softc *sc)
 		goto fail;
 	}
 
+	// Allocates memory that is ``DMA safe''
 	error = bus_dmamem_alloc(sc->sc_dmat, size, 0, 0, &rx_ring->seg, 1,
 	    &rx_ring->nsegs, BUS_DMA_NOWAIT);
 	if (error != 0) {
@@ -503,6 +530,8 @@ rtwn_alloc_rx_list(struct rtwn_softc *sc)
 		goto fail;
 	}
 
+	// Maps memory allocated with bus_dmamem_alloc() into kernel virtual
+    //         address space.
 	error = bus_dmamem_map(sc->sc_dmat, &rx_ring->seg, rx_ring->nsegs,
 	    size, (void **)&rx_ring->desc, BUS_DMA_NOWAIT | BUS_DMA_COHERENT);
 	if (error != 0) {
@@ -513,6 +542,7 @@ rtwn_alloc_rx_list(struct rtwn_softc *sc)
 	}
 	memset(rx_ring->desc, 0, size);
 
+	// Loads a DMA handle with mappings for a DMA transfer.
 	error = bus_dmamap_load_raw(sc->sc_dmat, rx_ring->map, &rx_ring->seg,
 	    1, size, BUS_DMA_NOWAIT);
 	if (error != 0) {
@@ -524,6 +554,7 @@ rtwn_alloc_rx_list(struct rtwn_softc *sc)
 	for (i = 0; i < RTWN_RX_LIST_COUNT; i++) {
 		rx_data = &rx_ring->rx_data[i];
 
+		// Allocates a DMA handle and initializes it
 		error = bus_dmamap_create(sc->sc_dmat, MCLBYTES, 1, MCLBYTES,
 		    0, BUS_DMA_NOWAIT, &rx_data->map);
 		if (error != 0) {
@@ -561,6 +592,7 @@ rtwn_alloc_rx_list(struct rtwn_softc *sc)
 		bus_dmamap_sync(sc->sc_dmat, rx_data->map, 0, MCLBYTES,
 		    BUS_DMASYNC_PREREAD);
 
+		// setup rx descriptors
 		rtwn_setup_rx_desc(sc, &rx_ring->desc[i],
 		    rx_data->map->dm_segs[0].ds_addr, MCLBYTES, i);
 	}
@@ -923,7 +955,7 @@ rtwn_efuse_read(struct rtwn_softc *sc)
 	rtwn_efuse_switch_power(sc);
 
 	memset(&sc->rom, 0xff, sizeof(sc->rom));
-	while (addr < 512) {
+	while (addr < 512) { // read the rom byte by byte
 		reg = rtwn_efuse_read_1(sc, addr);
 		if (reg == 0xff)
 			break;
@@ -1033,6 +1065,7 @@ rtwn_read_rom(struct rtwn_softc *sc)
 	DPRINTF(("PA setting=0x%x, board=0x%x, regulatory=%d\n",
 	    sc->pa_setting, sc->board_type, sc->regulatory));
 
+	// parse and store the macaddr from rom
 	IEEE80211_ADDR_COPY(ic->ic_myaddr, rom->macaddr);
 }
 
@@ -1045,6 +1078,7 @@ rtwn_media_change(struct ifnet *ifp)
 	if (error != ENETRESET)
 		return error;
 
+	// need reset
 	if ((ifp->if_flags & (IFF_UP | IFF_RUNNING)) ==
 	    (IFF_UP | IFF_RUNNING)) {
 		rtwn_stop(ifp, 0);
@@ -1254,6 +1288,8 @@ rtwn_calib_to(void *arg)
 	splx(s);
 }
 
+// used to inform the ieee80211(9)
+//     layer that the next channel for interface ic should be scanned
 static void
 rtwn_next_scan(void *arg)
 {
@@ -1265,7 +1301,8 @@ rtwn_next_scan(void *arg)
 
 	s = splnet();
 	if (ic->ic_state == IEEE80211_S_SCAN)
-		ieee80211_next_scan(ic);
+		ieee80211_next_scan(ic); // inform the ieee80211(9)
+    // layer that the next channel for interface ic should be scanned.
 	splx(s);
 }
 
@@ -1320,7 +1357,7 @@ rtwn_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg)
 		break;
 
 	case IEEE80211_S_SCAN:
-		if (nstate != IEEE80211_S_SCAN) {
+		if (nstate != IEEE80211_S_SCAN) { // do not scan repeatly
 			/*
 			 * End of scanning
 			 */
@@ -1338,7 +1375,7 @@ rtwn_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg)
 	case IEEE80211_S_ASSOC:
 		break;
 
-	case IEEE80211_S_RUN:
+	case IEEE80211_S_RUN: // start running
 		/* Turn link LED off. */
 		rtwn_set_led(sc, RTWN_LED_LINK, 0);
 
@@ -1414,7 +1451,7 @@ rtwn_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg)
 
 		rtwn_set_chan(sc, ic->ic_curchan, NULL);
 
-		/* Start periodic scan. */
+		/* Start periodic scan. */ // schedule next scan in rtwn_next_scan
 		callout_schedule(&sc->scan_to, mstohz(200));
 		break;
 
@@ -2155,10 +2192,10 @@ rtwn_watchdog(struct ifnet *ifp)
 
 	ifp->if_timer = 0;
 
-	if (sc->sc_tx_timer > 0) {
+	if (sc->sc_tx_timer > 0) { // after rtwn_start
 		if (--sc->sc_tx_timer == 0) {
 			aprint_error_dev(sc->sc_dev, "device timeout\n");
-			softint_schedule(sc->init_task);
+			softint_schedule(sc->init_task); // exec rtwn_init_task
 			if_statinc(ifp, if_oerrors);
 			return;
 		}
@@ -2177,6 +2214,7 @@ rtwn_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 	DPRINTFN(3, ("%s: %s: cmd=0x%08lx, data=%p\n", device_xname(sc->sc_dev),
 	    __func__, cmd, data));
 
+	// splnet() was used to block network software interrupts
 	s = splnet();
 
 	switch (cmd) {
@@ -2233,6 +2271,7 @@ rtwn_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 		}
 	}
 
+	// restores the system priority level
 	splx(s);
 
 	DPRINTFN(3, ("%s: %s: error=%d\n", device_xname(sc->sc_dev), __func__,
@@ -3409,9 +3448,9 @@ rtwn_init(struct ifnet *ifp)
 	ifp->if_flags |= IFF_RUNNING;
 
 	if (ic->ic_opmode == IEEE80211_M_MONITOR)
-		ieee80211_new_state(ic, IEEE80211_S_RUN, -1);
+		ieee80211_new_state(ic, IEEE80211_S_RUN, -1); // call rtwn_newstate
 	else
-		ieee80211_new_state(ic, IEEE80211_S_SCAN, -1);
+		ieee80211_new_state(ic, IEEE80211_S_SCAN, -1); // start scan
 
 	return 0;
 
@@ -3434,7 +3473,7 @@ rtwn_init_task(void *arg)
 	rtwn_stop(ifp, 0);
 
 	if ((ifp->if_flags & (IFF_UP | IFF_RUNNING)) == IFF_UP)
-		rtwn_init(ifp);
+		rtwn_init(ifp); // init after ifnet up
 
 	splx(s);
 }

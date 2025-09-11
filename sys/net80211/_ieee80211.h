@@ -224,8 +224,9 @@ extern const struct ieee80211_channel ieee80211_channel_anyc;
 #define	IEEE80211_RATE_SIZE	8		/* 802.11 standard */
 #define	IEEE80211_RATE_MAXSIZE	15		/* max rates we'll handle */
 
+// speed rate of different prtocol
 struct ieee80211_rateset {
-	u_int8_t		rs_nrates;
+	u_int8_t		rs_nrates; // num of speed rate
 	u_int8_t		rs_rates[IEEE80211_RATE_MAXSIZE];
 };
 

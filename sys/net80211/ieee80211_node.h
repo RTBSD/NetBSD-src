@@ -165,6 +165,10 @@ MALLOC_DECLARE(M_80211_NODE);
 
 struct ieee80211com;
 
+// These functions are used to manage node lists within the software 802.11
+//      stack.  These lists are typically used for implementing host-mode AP
+//      functionality, or providing signal quality information about neighbouring
+//      nodes.
 void	ieee80211_node_attach(struct ieee80211com *);
 void	ieee80211_node_lateattach(struct ieee80211com *);
 void	ieee80211_node_detach(struct ieee80211com *);

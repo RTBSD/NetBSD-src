@@ -116,7 +116,7 @@ ieee80211_proto_attach(struct ieee80211com *ic)
 {
 	struct ifnet *ifp = ic->ic_ifp;
 
-	/* XXX room for crypto  */
+	/* XXX room for crypto  */ // length so that we cal decap L2 frame
 	ifp->if_hdrlen = sizeof(struct ieee80211_qosframe_addr4);
 
 	ic->ic_rtsthreshold = IEEE80211_RTS_DEFAULT;
@@ -131,7 +131,7 @@ ieee80211_proto_attach(struct ieee80211com *ic)
 		AGGRESSIVE_MODE_SWITCH_HYSTERESIS;
 
 	/* protocol state change handler */
-	ic->ic_newstate = ieee80211_newstate;
+	ic->ic_newstate = ieee80211_newstate; // state machine
 
 	/* initialize management frame handlers */
 	ic->ic_recv_mgmt = ieee80211_recv_mgmt;
@@ -926,7 +926,7 @@ ieee80211_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg
 		ieee80211_state_name[ostate], ieee80211_state_name[nstate]);
 	ic->ic_state = nstate;			/* state transition */
 	ni = ic->ic_bss;			/* NB: no reference held */
-	switch (nstate) {
+	switch (nstate) { // state machine
 	case IEEE80211_S_INIT:
 		switch (ostate) {
 		case IEEE80211_S_INIT:

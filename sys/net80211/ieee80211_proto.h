@@ -54,6 +54,7 @@ enum ieee80211_state {
 extern	const char *ieee80211_mgt_subtype_name[];
 extern	const char *ieee80211_phymode_name[];
 
+// software 802.11 stack protocol helper functions
 void	ieee80211_proto_attach(struct ieee80211com *);
 void	ieee80211_proto_detach(struct ieee80211com *);
 

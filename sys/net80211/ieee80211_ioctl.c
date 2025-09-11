@@ -1232,6 +1232,8 @@ ieee80211_ioctl_getstainfo(struct ieee80211com *ic, struct ieee80211req *ireq)
 		space = req.space;
 		p = malloc(space, M_TEMP, M_WAITOK);
 		req.si = p;
+		// Return information about	the current  state  of	the  specified
+	    //   station(s)
 		ieee80211_iterate_nodes(&ic->ic_sta, get_sta_info, &req);
 		ireq->i_len = space - req.space;
 		error = copyout(p, ireq->i_data, ireq->i_len);
@@ -1330,6 +1332,7 @@ ieee80211_ioctl_get80211_fbsd(struct ieee80211com *ic, u_long cmd,
 		switch (ic->ic_state) {
 		case IEEE80211_S_INIT:
 		case IEEE80211_S_SCAN:
+			// return the requested SSID in the	buffer pointed to  by  i_data
 			ireq->i_len = ic->ic_des_esslen;
 			memcpy(tmpssid, ic->ic_des_essid, ireq->i_len);
 			break;
@@ -2574,15 +2577,15 @@ ieee80211_ioctl(struct ieee80211com *ic, u_long cmd, void *data)
 	u_int8_t tmpkey[IEEE80211_WEP_NKID][IEEE80211_KEYBUF_SIZE];
 
 	switch (cmd) {
-	case SIOCSIFMEDIA:
+	case SIOCSIFMEDIA: // net media
 	case SIOCGIFMEDIA:
 		error = ifmedia_ioctl(ifp, ifr, &ic->ic_media, cmd);
 		break;
-	case SIOCG80211:
+	case SIOCG80211: // Get configuration or	status information.
 		error = ieee80211_ioctl_get80211(ic, cmd,
 				(struct ieee80211req *) data);
 		break;
-	case SIOCS80211:
+	case SIOCS80211: // Set configuration information.
 		if ((error = kauth_authorize_network(kauth_cred_get(),
 		    KAUTH_NETWORK_INTERFACE,
 		    KAUTH_REQ_NETWORK_INTERFACE_SETPRIV, ifp, (void *)cmd,
@@ -2871,6 +2874,9 @@ ieee80211_ioctl(struct ieee80211com *ic, u_long cmd, void *data)
 			error = 0;
 		break;
 	default:
+    // Ioctls related to the Ethernet layer also pass
+    //  through here, but are handed off to ether_ioctl() when no match for cmd
+    //  is found.
 		error = ether_ioctl(ifp, cmd, data);
 		break;
 	}

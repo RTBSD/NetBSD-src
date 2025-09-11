@@ -174,6 +174,8 @@ ieee80211_init_link_state(struct ieee80211com *ic)
 	}
 }
 
+// The ieee80211_ifattach() function attaches the wireless network interface
+//     ic to the 802.11 network stack layer. 
 void
 ieee80211_ifattach(struct ieee80211com *ic)
 {
@@ -182,20 +184,22 @@ ieee80211_ifattach(struct ieee80211com *ic)
 	int i;
 
 #ifdef __NetBSD__
-	ieee80211_init();
+	ieee80211_init(); // init the stack
 #endif /* __NetBSD__ */
 
+	// Perform the device-independent, but Ethernet-specific initial-
+	// ization of the interface pointed to by ifp.
 	ether_ifattach(ifp, ic->ic_myaddr); // ethernet attachment
 	bpf_attach2(ifp, DLT_IEEE802_11, // bpf attachment
 	    sizeof(struct ieee80211_frame_addr4), &ic->ic_rawbpf);
 
-	ieee80211_crypto_attach(ic);
+	ieee80211_crypto_attach(ic); // initializes crypto support
 
 	/*
 	 * Fill in 802.11 available channel set, mark
 	 * all available channels as active, and pick
 	 * a default channel if not already specified.
-	 */
+	 */ // bitmap of channel avail
 	memset(ic->ic_chan_avail, 0, sizeof(ic->ic_chan_avail));
 	ic->ic_modecaps |= 1<<IEEE80211_MODE_AUTO;
 	for (i = 0; i <= IEEE80211_CHAN_MAX; i++) {
@@ -235,7 +239,7 @@ ieee80211_ifattach(struct ieee80211com *ic)
 	}
 	/* validate ic->ic_curmode */
 	if ((ic->ic_modecaps & (1<<ic->ic_curmode)) == 0)
-		ic->ic_curmode = IEEE80211_MODE_AUTO;
+		ic->ic_curmode = IEEE80211_MODE_AUTO; // auto PHY mode by default
 	ic->ic_des_chan = IEEE80211_CHAN_ANYC;	/* any channel is ok */
 #if 0
 	/*
@@ -257,6 +261,7 @@ ieee80211_ifattach(struct ieee80211com *ic)
 	ic->ic_txpowlimit = IEEE80211_TXPOWER_MAX;
 
 	LIST_INSERT_HEAD(&ieee80211com_head, ic, ic_list);
+	// called to initialize node database management callbacks for the interface ic
 	ieee80211_node_attach(ic);
 	ieee80211_proto_attach(ic);
 
@@ -839,12 +844,15 @@ ieee80211_watchdog(struct ieee80211com *ic)
 		ic->ic_ifp->if_timer = 1;
 }
 
+// 5GHz, 6, 9, 12, 18, 24, 36, 48, 54 Mbps
 const struct ieee80211_rateset ieee80211_std_rateset_11a =
 	{ 8, { 12, 18, 24, 36, 48, 72, 96, 108 } };
 
+// 2.4GHz, 1, 2, 5.5, 11 Mbps
 const struct ieee80211_rateset ieee80211_std_rateset_11b =
 	{ 4, { 2, 4, 11, 22 } };
 
+// 2.4GHz, 1, 2, 5.5, 11, 6, 9, 12, 18, 24, 36, 48, 54 Mbps
 const struct ieee80211_rateset ieee80211_std_rateset_11g =
 	{ 12, { 2, 4, 11, 22, 12, 18, 24, 36, 48, 72, 96, 108 } };
 
