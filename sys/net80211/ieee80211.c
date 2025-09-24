@@ -106,6 +106,7 @@ ieee80211_add_vap(struct ieee80211com *ic)
 	int s;
 	u_int8_t b;
 
+	// 阻塞网络软中断
 	s = splnet();
 	ic->ic_vap = 0;
 	for (i = 0; i < N(ieee80211_vapmap) && ieee80211_vapmap[i] == 0xff; i++)
@@ -162,6 +163,7 @@ ieee80211_init_link_state(struct ieee80211com *ic)
 	 * That leaves BSS mode, which starts off DOWN and will
 	 * transition to UP when it joins a node.
 	 */
+	// 链路 down 状态
 	switch (ic->ic_opmode) {
 	case IEEE80211_M_AHDEMO:
 	case IEEE80211_M_HOSTAP:
@@ -182,6 +184,7 @@ ieee80211_ifattach(struct ieee80211com *ic)
 	int i;
 
 #ifdef __NetBSD__
+	// 第一次进入进行 net80211 的初始化
 	ieee80211_init();
 #endif /* __NetBSD__ */
 

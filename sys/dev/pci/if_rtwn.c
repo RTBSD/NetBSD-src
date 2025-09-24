@@ -99,6 +99,8 @@ static void	rtwn_attach(device_t, device_t, void *);
 static int	rtwn_detach(device_t, int);
 static int	rtwn_activate(device_t, enum devact);
 
+// Realtek RTL8188CE/RTL8192CE PCIe IEEE 802.11b/g/n wireless net-
+//     work device 驱动
 CFATTACH_DECL_NEW(rtwn, sizeof(struct rtwn_softc), rtwn_match,
     rtwn_attach, rtwn_detach, rtwn_activate);
 
@@ -188,6 +190,7 @@ rtwn_lookup(const struct pci_attach_args *pa)
 	const struct rtwn_device *rd;
 	int i;
 
+	// 与已知设备匹配
 	for (i = 0; i < __arraycount(rtwn_devices); i++) {
 		rd = &rtwn_devices[i];
 		if (PCI_VENDOR(pa->pa_id) == rd->rd_vendor &&
@@ -226,11 +229,13 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 
 	pci_aprint_devinfo(pa, NULL);
 
+	// 初始化扫描任务和校正任务
 	callout_init(&sc->scan_to, 0);
 	callout_setfunc(&sc->scan_to, rtwn_next_scan, sc);
 	callout_init(&sc->calib_to, 0);
 	callout_setfunc(&sc->calib_to, rtwn_calib_to, sc);
 
+	// 注册软件中断任务，softintr 和 rtwn 初始化，优先级为 SOFTINT_NET
 	sc->sc_soft_ih = softint_establish(SOFTINT_NET, rtwn_softintr, sc);
 	sc->init_task = softint_establish(SOFTINT_NET, rtwn_init_task, sc);
 
@@ -264,6 +269,7 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 	}
 	aprint_normal_dev(self, "interrupting at %s\n", intrstr);
 
+	// 读芯片 id
 	error = rtwn_read_chipid(sc);
 	if (error != 0) {
 		aprint_error_dev(self, "unsupported test or unknown chip\n");
@@ -359,10 +365,13 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 	IFQ_SET_READY(&ifp->if_snd);
 	memcpy(ifp->if_xname, device_xname(sc->sc_dev), IFNAMSIZ);
 
+	// 初始化网络接口
 	if_initialize(ifp);
+	// 初始化 802.11 网络接口
 	ieee80211_ifattach(ic);
 	/* Use common softint-based if_input */
 	ifp->if_percpuq = if_percpuq_create(ifp);
+	// 注册网络接口
 	if_register(ifp);
 
 	/* override default methods */
@@ -372,7 +381,9 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 
 	/* Override state transition machine. */
 	sc->sc_newstate = ic->ic_newstate;
+	// 网络设备状态机变化
 	ic->ic_newstate = rtwn_newstate;
+	// 初始化 802.11 PHY
 	ieee80211_media_init(ic, rtwn_media_change, ieee80211_media_status);
 
 	bpf_attach2(ifp, DLT_IEEE802_11_RADIO,
@@ -1038,6 +1049,7 @@ rtwn_media_change(struct ifnet *ifp)
 
 	if ((ifp->if_flags & (IFF_UP | IFF_RUNNING)) ==
 	    (IFF_UP | IFF_RUNNING)) {
+		// 链路发生变化，重新初始化
 		rtwn_stop(ifp, 0);
 		error = rtwn_init(ifp);
 	}
@@ -1813,6 +1825,7 @@ rtwn_rx_frame(struct rtwn_softc *sc, struct r92c_rx_desc_pci *rx_desc,
 	ni = ieee80211_find_rxnode(ic, (struct ieee80211_frame_min *)wh);
 
 	/* push the frame up to the 802.11 stack */
+	// 由 80211 协议栈处理接收到的数据帧
 	ieee80211_input(ic, m, ni, rssi, 0);
 
 	/* Node is no longer needed. */
@@ -2079,6 +2092,7 @@ rtwn_start(struct ifnet *ifp)
 			break;
 		}
 		/* Send pending management frames first. */
+		// 获取一个 mbuf 用来发送
 		IF_DEQUEUE(&ic->ic_mgtq, m);
 		if (m != NULL) {
 			ni = M_GETCTX(m, struct ieee80211_node *);
@@ -2140,8 +2154,10 @@ rtwn_watchdog(struct ifnet *ifp)
 	ifp->if_timer = 0;
 
 	if (sc->sc_tx_timer > 0) {
+		 // 网络接口启动一段时间后开始 init_task
 		if (--sc->sc_tx_timer == 0) {
 			aprint_error_dev(sc->sc_dev, "device timeout\n");
+			// 启动 init_task
 			softint_schedule(sc->init_task);
 			if_statinc(ifp, if_oerrors);
 			return;
@@ -3506,6 +3522,7 @@ rtwn_intr(void *xsc)
 	/* Disable interrupts. */
 	rtwn_write_4(sc, R92C_HIMR, 0x00000000);
 
+	// 运行中断下半部
 	softint_schedule(sc->sc_soft_ih);
 	return 1;
 }

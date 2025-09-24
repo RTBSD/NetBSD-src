@@ -612,6 +612,7 @@ ieee80211_notify_node_join(struct ieee80211com *ic, struct ieee80211_node *ni,
 		rt_ieee80211msg(ifp, newassoc ?
 		    RTM_IEEE80211_ASSOC : RTM_IEEE80211_REASSOC,
 		    &iev, sizeof(iev));
+		// 链路 up 状态
 		if_link_state_change(ifp, LINK_STATE_UP);
 	} else {
 		IEEE80211_ADDR_COPY(iev.iev_addr, ni->ni_macaddr);

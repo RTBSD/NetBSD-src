@@ -171,6 +171,7 @@ ieee80211_crypto_attach(struct ieee80211com *ic)
 	/* NB: we assume everything is pre-zero'd */
 	cs->cs_def_txkey = IEEE80211_KEYIX_NONE;
 	cs->cs_max_keyix = IEEE80211_WEP_NKID;
+	// 加密方式 none
 	ciphers[IEEE80211_CIPHER_NONE] = &ieee80211_cipher_none;
 	for (i = 0; i < IEEE80211_WEP_NKID; i++)
 		ieee80211_crypto_resetkey(ic, &cs->cs_nw_keys[i],
