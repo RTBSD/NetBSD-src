@@ -263,6 +263,8 @@ ieee80211_ifattach(struct ieee80211com *ic)
 	ieee80211_node_attach(ic);
 	ieee80211_proto_attach(ic);
 
+	// 增加一个 vap (virtual access point)，将 wlan 的配置特性从具体的射频驱动 rtwn
+	//	中分离处理，专门用 vap 实例来表示
 	ieee80211_add_vap(ic);
 
 	ieee80211_sysctl_attach(ic);		/* NB: requires ic_vap */
