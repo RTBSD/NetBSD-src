@@ -357,6 +357,7 @@ urtwn_match(device_t parent, cfdata_t match, void *aux)
 {
 	struct usb_attach_arg *uaa = aux;
 
+	// USB 设备已知匹配
 	return urtwn_lookup(urtwn_devs, uaa->uaa_vendor, uaa->uaa_product) !=
 	    NULL ?  UMATCH_VENDOR_PRODUCT : UMATCH_NONE;
 }
@@ -380,6 +381,7 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 	sc->sc_udev = uaa->uaa_device;
 
 	sc->chip = 0;
+	// 根据型号获取 urtwn_dev 静态实例
 	dev = urtwn_lookup(urtwn_devs, uaa->uaa_vendor, uaa->uaa_product);
 	if (dev != NULL && ISSET(dev->flags, FLAG_RTL8188E))
 		SET(sc->chip, URTWN_CHIP_88E);
@@ -399,8 +401,11 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 	USETW(req.wIndex, UHF_PORT_SUSPEND);
 	USETW(req.wLength, 0);
 
+	// 关闭 remote wakeup
 	(void) usbd_do_request(sc->sc_udev, &req, 0);
 
+	// 创建一个信号量，如果异步任务 urtwn_task 处理完成，就发送信号
+	//  网络接口的销毁等都会等待这个信号量完成
 	cv_init(&sc->sc_task_cv, "urtwntsk");
 	mutex_init(&sc->sc_task_mtx, MUTEX_DEFAULT, IPL_NET);
 	mutex_init(&sc->sc_tx_mtx, MUTEX_DEFAULT, IPL_NONE);
@@ -408,8 +413,10 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 	mutex_init(&sc->sc_fwcmd_mtx, MUTEX_DEFAULT, IPL_NONE);
 	mutex_init(&sc->sc_write_mtx, MUTEX_DEFAULT, IPL_NONE);
 
+	// 创建异步任务处理线程
 	usb_init_task(&sc->sc_task, urtwn_task, sc, 0);
 
+	// 创建一个扫描和校正的 timeout 任务
 	callout_init(&sc->sc_scan_to, 0);
 	callout_setfunc(&sc->sc_scan_to, urtwn_next_scan, sc);
 	callout_init(&sc->sc_calib_to, 0);
@@ -418,6 +425,7 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 	rnd_attach_source(&sc->rnd_source, device_xname(sc->sc_dev),
 	    RND_TYPE_NET, RND_FLAG_DEFAULT);
 
+	// 选择配置0
 	error = usbd_set_config_no(sc->sc_udev, 1, 0);
 	if (error != 0) {
 		aprint_error_dev(self, "failed to set configuration"
@@ -432,6 +440,7 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 		goto fail;
 	}
 
+	// 读芯片 id 确定型号
 	error = urtwn_read_chipid(sc);
 	if (error != 0) {
 		aprint_error_dev(self, "unsupported test chip\n");
@@ -450,12 +459,14 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 		sc->nrxchains = 1;
 	}
 
+	// 读不同型号的 ROM
 	if (ISSET(sc->chip, URTWN_CHIP_88E) ||
 	    ISSET(sc->chip, URTWN_CHIP_92EU))
 		urtwn_r88e_read_rom(sc);
 	else
 		urtwn_read_rom(sc);
 
+	// 打印外设型号
 	aprint_normal_dev(self, "MAC/BB RTL%s, RF 6052 %zdT%zdR, address %s\n",
 	    (sc->chip & URTWN_CHIP_92EU) ? "8192EU" :
 	    (sc->chip & URTWN_CHIP_92C) ? "8192CU" :
@@ -470,6 +481,7 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 		aprint_error_dev(sc->sc_dev, "could not open pipes\n");
 		goto fail;
 	}
+	// 驱动使用的 USB 端点信息
 	aprint_normal_dev(self, "%d rx pipe%s, %d tx pipe%s\n",
 	    sc->rx_npipe, sc->rx_npipe > 1 ? "s" : "",
 	    sc->tx_npipe, sc->tx_npipe > 1 ? "s" : "");
@@ -514,16 +526,22 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 	IFQ_SET_READY(&ifp->if_snd);
 	memcpy(ifp->if_xname, device_xname(sc->sc_dev), IFNAMSIZ);
 
+	// 初始化网络接口
 	if_initialize(ifp);
+	// 初始化80211栈接口
 	ieee80211_ifattach(ic);
 
 	/* override default methods */
+	// 在 station 模式，更新 station 连接的 AP
 	ic->ic_newassoc = urtwn_newassoc;
 	ic->ic_reset = urtwn_reset;
+	//  无线多媒体扩展 (Wireless Multimedia Extension) 支持
+	//   是一种 QoS 技术
 	ic->ic_wme.wme_update = urtwn_wme_update;
 
 	/* Override state transition machine. */
 	sc->sc_newstate = ic->ic_newstate;
+	// 硬件状态机支持
 	ic->ic_newstate = urtwn_newstate;
 
 	/* XXX media locking needs revisiting */
@@ -535,7 +553,9 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 	    sizeof(struct ieee80211_frame) + IEEE80211_RADIOTAP_HDRLEN,
 	    &sc->sc_drvbpf);
 
+	// rtwn 的 radiotap 头长度
 	sc->sc_rxtap_len = sizeof(sc->sc_rxtapu);
+	// 给 80211 栈设置上 radiotap 头
 	sc->sc_rxtap.wr_ihdr.it_len = htole16(sc->sc_rxtap_len);
 	sc->sc_rxtap.wr_ihdr.it_present = htole32(URTWN_RX_RADIOTAP_PRESENT);
 
@@ -543,6 +563,7 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 	sc->sc_txtap.wt_ihdr.it_len = htole16(sc->sc_txtap_len);
 	sc->sc_txtap.wt_ihdr.it_present = htole32(URTWN_TX_RADIOTAP_PRESENT);
 
+	// 创建 per-cpu 网络队列，避免 SMP 系统中加锁带来的性能损失
 	ifp->if_percpuq = if_percpuq_create(ifp);
 	if_register(ifp);
 

@@ -34,7 +34,15 @@
 	status = "okay";
 };
 
-&usb3_0 {
+/*&usb3_0 {
+	status = "okay";
+};*/
+
+&sata0 {
+	status = "okay";
+};
+
+&sata1 {
 	status = "okay";
 };
 

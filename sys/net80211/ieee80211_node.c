@@ -2265,6 +2265,7 @@ ieee80211_node_join(struct ieee80211com *ic, struct ieee80211_node *ni,
 	);
 
 	/* give driver a chance to setup state like ni_txrate */
+	// 外设侧处理新连接 AP
 	if (ic->ic_newassoc != NULL)
 		ic->ic_newassoc(ni, newassoc);
 	ni->ni_inact_reload = ic->ic_inact_auth;

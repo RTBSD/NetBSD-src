@@ -1,4 +1,4 @@
-#include "firefly.dtsi"
+#include "firefly_v2.dtsi"
 
 / {
 	compatible = "firefly,pi_v2";
@@ -68,12 +68,12 @@
 };
 
 &soc {
-	usb3_0: usb3@31a08000 {
+	/*usb3_0: usb3@31a08000 {
 		compatible = "generic-xhci";
 		reg = <0x0 0x31a08000 0x0 0x18000>;
 		interrupts = <GIC_SPI 16 IRQ_TYPE_LEVEL_HIGH>;
 		status = "disabled";
-	};
+	};*/
 
 	macb0: ethernet@3200c000 {
 		compatible = "cdns,firefly";
