@@ -157,6 +157,7 @@ ieee80211_rssadapt_sysctl_setup(struct sysctllog **clog)
 	    NULL, 0, NULL, 0, CTL_CREATE, CTL_EOL)) != 0)
 		goto err;
 
+	// 创建 sysctl net.link.ieee80211.rssadapt.debug
 	if ((rc = sysctl_createv(clog, 0, &node, &node,
 	    CTLFLAG_PERMANENT, CTLTYPE_NODE, "rssadapt",
 	    SYSCTL_DESCR("Received Signal Strength adaptation controls"),

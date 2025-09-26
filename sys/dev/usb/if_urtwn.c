@@ -413,7 +413,7 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 	mutex_init(&sc->sc_fwcmd_mtx, MUTEX_DEFAULT, IPL_NONE);
 	mutex_init(&sc->sc_write_mtx, MUTEX_DEFAULT, IPL_NONE);
 
-	// 创建异步任务处理线程
+	// 创建任务处理线程
 	usb_init_task(&sc->sc_task, urtwn_task, sc, 0);
 
 	// 创建一个扫描和校正的 timeout 任务
@@ -928,6 +928,8 @@ urtwn_task(void *arg)
 	    (ic->ic_opmode == IEEE80211_M_HOSTAP ||
 	    ic->ic_opmode == IEEE80211_M_IBSS)) {
 
+		// 如果当前工作在 AP 状态，需要发送信标帧（beacon）用于广播
+		//	当前 AP 的 SSID，连接速率和加密方式等信息
 		struct mbuf *m = ieee80211_beacon_alloc(ic, ic->ic_bss,
 		    &sc->sc_bo);
 		if (m == NULL) {
@@ -935,6 +937,7 @@ urtwn_task(void *arg)
 			    "could not allocate beacon");
 		}
 
+		// 通过 USB 总线发送信标帧
 		if (urtwn_tx_beacon(sc, m, ic->ic_bss) != 0) {
 			aprint_error_dev(sc->sc_dev, "could not send beacon\n");
 		}
@@ -946,7 +949,9 @@ urtwn_task(void *arg)
 	/* Process host commands. */
 	s = splusb();
 	mutex_spin_enter(&sc->sc_task_mtx);
+	// 打印命令队列的信息
 	urtwn_cmdq_invariants(sc);
+	// 在 sc_task_mtx spin lock 的保护中操作命令队列 ring
 	while (ring->next != ring->cur) {
 		KASSERTMSG(ring->queued > 0, "%s: cur=%d next=%d queued=%d",
 		    device_xname(sc->sc_dev),
@@ -955,6 +960,7 @@ urtwn_task(void *arg)
 		mutex_spin_exit(&sc->sc_task_mtx);
 		splx(s);
 		/* Invoke callback with kernel lock held. */
+		// 执行具体的操作，如 urtwn_calib_to_cb，urtwn_newstate_cb 和 urtwn_wme_update_cb
 		cmd->cb(sc, cmd->data);
 		s = splusb();
 		mutex_spin_enter(&sc->sc_task_mtx);
@@ -965,6 +971,7 @@ urtwn_task(void *arg)
 		ring->queued--;
 		ring->next = (ring->next + 1) % URTWN_HOST_CMD_RING_COUNT;
 	}
+	// 发布信号，任务执行完成
 	cv_broadcast(&sc->sc_task_cv);
 	mutex_spin_exit(&sc->sc_task_mtx);
 	splx(s);
@@ -1004,6 +1011,7 @@ urtwn_do_async(struct urtwn_softc *sc, void (*cb)(struct urtwn_softc *, void *),
 	mutex_spin_exit(&sc->sc_task_mtx);
 	splx(s);
 
+	// 执行任务 urtwn_task
 	if (schedtask)
 		usb_add_task(sc->sc_udev, &sc->sc_task, USB_TASKQ_DRIVER);
 }
@@ -1928,6 +1936,7 @@ urtwn_next_scan(void *arg)
 		return;
 
 	s = splnet();
+	// 调用协议栈的扫描功能
 	if (sc->sc_ic.ic_state == IEEE80211_S_SCAN)
 		ieee80211_next_scan(&sc->sc_ic);
 	splx(s);
@@ -1964,6 +1973,7 @@ urtwn_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg)
 	/* Do it in a process context. */
 	cmd.state = nstate;
 	cmd.arg = arg;
+	// 异步任务提交接口
 	urtwn_do_async(sc, urtwn_newstate_cb, &cmd, sizeof(cmd));
 	return 0;
 }
@@ -1986,6 +1996,7 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 	s = splnet();
 	mutex_enter(&sc->sc_write_mtx);
 
+	// 如果有 scan 或者校正任务，停止
 	callout_stop(&sc->sc_scan_to);
 	callout_stop(&sc->sc_calib_to);
 
@@ -1994,6 +2005,7 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 		break;
 
 	case IEEE80211_S_SCAN:
+		// 状态机是停止扫描
 		if (nstate != IEEE80211_S_SCAN) {
 			/*
 			 * End of scanning
@@ -2013,6 +2025,7 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 		break;
 
 	case IEEE80211_S_RUN:
+		// 从运行状态离开，先关掉 LED 灯
 		/* Turn link LED off. */
 		urtwn_set_led(sc, URTWN_LED_LINK, 0);
 
@@ -2055,11 +2068,13 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 
 	switch (nstate) {
 	case IEEE80211_S_INIT:
+		// 状态是刚开始初始化
 		/* Turn link LED off. */
 		urtwn_set_led(sc, URTWN_LED_LINK, 0);
 		break;
 
 	case IEEE80211_S_SCAN:
+		// 状态是开始扫描
 		if (ostate != IEEE80211_S_SCAN) {
 			/*
 			 * Begin of scanning
@@ -2104,11 +2119,13 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 		    IEEE80211_HTINFO_2NDCHAN_NONE);
 
 		/* Start periodic scan. */
+		// 启动扫描流程，主要由 80211 协议栈完成
 		if (!sc->sc_dying)
 			callout_schedule(&sc->sc_scan_to, hz / 5);
 		break;
 
 	case IEEE80211_S_AUTH:
+		// 状态是开始认证
 		/* Set initial gain under link. */
 		reg = urtwn_bb_read(sc, R92C_OFDM0_AGCCORE1(0));
 		reg = RW(reg, R92C_OFDM0_AGCCORE1_GAIN, 0x32);
@@ -2136,12 +2153,14 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 		break;
 
 	case IEEE80211_S_RUN:
+		// 状态是开始运行
 		ni = ic->ic_bss;
 
 		/* XXX: Set 20MHz mode */
 		urtwn_set_chan(sc, ic->ic_curchan,
 		    IEEE80211_HTINFO_2NDCHAN_NONE);
 
+		// 如果是 Monitor 模式（一般不会走这里）
 		if (ic->ic_opmode == IEEE80211_M_MONITOR) {
 			/* Back to 20MHz mode */
 			urtwn_set_chan(sc, ic->ic_curchan,
@@ -2192,6 +2211,7 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 		msr &= R92C_MSR_MASK;
 		switch (ic->ic_opmode) {
 		case IEEE80211_M_STA:
+			// 设置是 Station 模式
 			/* Allow Rx from our BSSID only. */
 			urtwn_write_4(sc, R92C_RCR,
 			    urtwn_read_4(sc, R92C_RCR) |
@@ -2203,6 +2223,7 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 			msr |= R92C_MSR_INFRA;
 			break;
 		case IEEE80211_M_HOSTAP:
+			// 设置是 Ap 模式
 			urtwn_write_2(sc, R92C_BCNTCFG, 0x000f);
 
 			/* Allow Rx from any BSSID. */
@@ -2237,7 +2258,7 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 		if (ISSET(sc->chip, URTWN_CHIP_88E) ||
 		    ISSET(sc->chip, URTWN_CHIP_92EU))
 			ni->ni_txrate = ni->ni_rates.rs_nrates - 1;
-		else
+		else // 速率自适应
 			urtwn_ra_init(sc);
 
 		/* Turn link LED on. */
@@ -2256,6 +2277,7 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 		break;
 	}
 
+	// 执行 80211 栈默认的状态机流程
 	(*sc->sc_newstate)(ic, nstate, cmd->arg);
 
 	mutex_exit(&sc->sc_write_mtx);
@@ -2500,6 +2522,7 @@ urtwn_rx_frame(struct urtwn_softc *sc, uint8_t *buf, int pktlen)
 	DPRINTFN(DBG_RX, "Rx frame len=%jd rate=%jd infosz=%jd rssi=%jd",
 	    pktlen, rate, infosz, rssi);
 
+	// 创建一个 mbuf，里面包含一个 packet header
 	MGETHDR(m, M_DONTWAIT, MT_DATA);
 	if (__predict_false(m == NULL)) {
 		aprint_error_dev(sc->sc_dev, "couldn't allocate rx mbuf\n");
@@ -2508,6 +2531,7 @@ urtwn_rx_frame(struct urtwn_softc *sc, uint8_t *buf, int pktlen)
 		return;
 	}
 	if (pktlen > (int)MHLEN) {
+		// 如果接收到的数据比 packet header 长，再分配 mbuf cluster
 		MCLGET(m, M_DONTWAIT);
 		if (__predict_false(!(m->m_flags & M_EXT))) {
 			aprint_error_dev(sc->sc_dev,
@@ -2520,11 +2544,15 @@ urtwn_rx_frame(struct urtwn_softc *sc, uint8_t *buf, int pktlen)
 	}
 
 	/* Finalize mbuf. */
+	// 设置 mbuf 关联的网络接口 ifp
 	m_set_rcvif(m, ifp);
+	// 获取接收的数据帧
 	wh = (struct ieee80211_frame *)((uint8_t *)&stat[1] + infosz);
+	// 将接收的数据帧拷贝到 mbuf 中，设置数据长度
 	memcpy(mtod(m, uint8_t *), wh, pktlen);
 	m->m_pkthdr.len = m->m_len = pktlen;
 
+	// 协议栈处理数据过程中，暂时关闭网络软中断，不处理新的数据
 	s = splnet();
 	if (__predict_false(sc->sc_drvbpf != NULL)) {
 		// 获取接收 radiotap 头
@@ -2559,14 +2587,18 @@ urtwn_rx_frame(struct urtwn_softc *sc, uint8_t *buf, int pktlen)
 		bpf_mtap2(sc->sc_drvbpf, tap, sc->sc_rxtap_len, m, BPF_D_IN);
 	}
 
+	// 从接收帧获取接收管理的 80211 node，增加 node 的引用计数
 	ni = ieee80211_find_rxnode(ic, (struct ieee80211_frame_min *)wh);
 
 	/* push the frame up to the 802.11 stack */
+	// 将接收到数据推送给 80211 协议，以 mbuf 进行管理
 	ieee80211_input(ic, m, ni, rssi, 0);
 
 	/* Node is no longer needed. */
+	// 如果 node 的引用计数变成 0， 会释放 node
 	ieee80211_free_node(ni);
 
+	// 打开网络软中断，继续接收网络包
 	splx(s);
 }
 

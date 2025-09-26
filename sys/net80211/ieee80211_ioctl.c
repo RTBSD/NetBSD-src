@@ -2574,8 +2574,10 @@ ieee80211_ioctl(struct ieee80211com *ic, u_long cmd, void *data)
 	u_int8_t tmpkey[IEEE80211_WEP_NKID][IEEE80211_KEYBUF_SIZE];
 
 	switch (cmd) {
+	// ioctlprint SIOCSIFMEDIA 在控制台输入，查看 ioctl 信息
 	case SIOCSIFMEDIA:
 	case SIOCGIFMEDIA:
+		// 执行 PHY 相关的操作
 		error = ifmedia_ioctl(ifp, ifr, &ic->ic_media, cmd);
 		break;
 	case SIOCG80211:

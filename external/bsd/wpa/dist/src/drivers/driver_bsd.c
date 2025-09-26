@@ -117,6 +117,7 @@ bsd_set80211(void *priv, int op, int val, const void *arg, int arg_len)
 	ireq.i_data = (void *) arg;
 	ireq.i_len = arg_len;
 
+	// 用户态进行 80211 设置
 	if (ioctl(drv->global->sock, SIOCS80211, &ireq) < 0) {
 		wpa_printf(MSG_ERROR, "ioctl[SIOCS80211, op=%u, val=%u, "
 			   "arg_len=%u]: %s", op, val, arg_len,
@@ -138,6 +139,7 @@ bsd_get80211(void *priv, struct ieee80211req *ireq, int op, void *arg,
 	ireq->i_len = arg_len;
 	ireq->i_data = arg;
 
+	// 用户态获取 80211 的配置
 	if (ioctl(drv->global->sock, SIOCG80211, ireq) < 0) {
 		wpa_printf(MSG_ERROR, "ioctl[SIOCG80211, op=%u, "
 			   "arg_len=%u]: %s", op, arg_len, strerror(errno));
@@ -185,6 +187,7 @@ bsd_get_ssid(void *priv, u8 *ssid, int len)
 	os_memcpy(ssid, nwid.i_nwid, nwid.i_len);
 	return nwid.i_len;
 #else
+	// 获取当前连接的 SSID
 	return get80211var(drv, IEEE80211_IOC_SSID, ssid, IEEE80211_NWID_LEN);
 #endif
 }
@@ -217,6 +220,7 @@ bsd_get_if_media(void *priv)
 	os_memset(&ifmr, 0, sizeof(ifmr));
 	os_strlcpy(ifmr.ifm_name, drv->ifname, sizeof(ifmr.ifm_name));
 
+	// 获取 PHY 相关的信息
 	if (ioctl(drv->global->sock, SIOCGIFMEDIA, &ifmr) < 0) {
 		wpa_printf(MSG_ERROR, "%s: SIOCGIFMEDIA %s", __func__,
 			   strerror(errno));

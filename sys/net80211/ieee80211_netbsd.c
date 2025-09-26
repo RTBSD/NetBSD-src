@@ -157,6 +157,7 @@ ieee80211_sysctl_treetop(struct sysctllog **log)
 	int rc;
 	const struct sysctlnode *rnode;
 
+	// sysctl 节点是 net.link.ieee80211
 	if ((rc = sysctl_createv(log, 0, NULL, &rnode,
 	    CTLFLAG_PERMANENT, CTLTYPE_NODE, "link",
 	    "link-layer statistics and controls",
@@ -187,12 +188,14 @@ ieee80211_sysctl_attach(struct ieee80211com *ic)
 
 	snprintf(num, sizeof(num), "vap%u", ic->ic_vap);
 
+	// 创建 sysctl net.link.ieee80211.vap0
 	if ((rc = sysctl_createv(&ic->ic_sysctllog, 0, &rnode, &rnode,
 	    CTLFLAG_PERMANENT, CTLTYPE_NODE, num, SYSCTL_DESCR("virtual AP"),
 	    NULL, 0, NULL, 0, CTL_CREATE, CTL_EOL)) != 0)
 		goto err;
 
 	/* control debugging printfs */
+	// sysctl net.link.ieee80211.vap0.parent = urtwn0
 	if ((rc = sysctl_createv(&ic->ic_sysctllog, 0, &rnode, &cnode,
 	    CTLFLAG_PERMANENT|CTLFLAG_READONLY, CTLTYPE_STRING,
 	    "parent", SYSCTL_DESCR("parent device"),
@@ -479,6 +482,7 @@ ieee80211_sysctl_setup(void)
 	if ((rnode = ieee80211_sysctl_treetop(&ieee80211_sysctllog)) == NULL)
 		return;
 
+	// 创建节点 sysctl net.link.ieee80211
 	if ((rc = sysctl_createv(&ieee80211_sysctllog, 0, &rnode, NULL,
 	    CTLFLAG_PERMANENT, CTLTYPE_NODE, "nodes", "client/peer stations",
 	    ieee80211_sysctl_node, 0, NULL, 0, CTL_CREATE, CTL_EOL)) != 0)
@@ -486,6 +490,7 @@ ieee80211_sysctl_setup(void)
 
 #ifdef IEEE80211_DEBUG
 	/* control debugging printfs */
+	// 控制调试打印信息
 	if ((rc = sysctl_createv(&ieee80211_sysctllog, 0, &rnode, NULL,
 	    CTLFLAG_PERMANENT|CTLFLAG_READWRITE, CTLTYPE_INT,
 	    "debug", SYSCTL_DESCR("control debugging printfs"),
