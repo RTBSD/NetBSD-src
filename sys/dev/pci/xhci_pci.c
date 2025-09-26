@@ -288,6 +288,7 @@ xhci_pci_attach(device_t parent, device_t self, void *aux)
 		aprint_error_dev(self, "couldn't establish power handler\n");
 
 	/* Attach usb buses. */
+	// 添加对应的 USB 总线，对应 usb3.0 roothub 和 usb2.0 roothub
 	if (sc->sc_usb3nports != 0)
 		sc->sc_child =
 		    config_found(self, &sc->sc_bus, usbctlprint, CFARGS_NONE);
@@ -353,6 +354,7 @@ xhci_pci_detach(device_t self, int flags)
 	return 0;
 }
 
+// 挂在 pci 总线上的 xhci 控制器
 CFATTACH_DECL3_NEW(xhci_pci, sizeof(struct xhci_pci_softc),
     xhci_pci_match, xhci_pci_attach, xhci_pci_detach, xhci_activate, NULL,
     xhci_childdet, DVF_DETACH_SHUTDOWN);

@@ -266,7 +266,9 @@ struct usbd_pipe {
 			       *up_methods;
 };
 
+// 用来描述一次 USB 传输
 struct usbd_xfer {
+	// 逻辑上的 USB 通信管道，对应一个 Endpoint
 	struct usbd_pipe       *ux_pipe;
 	void		       *ux_priv;
 	void		       *ux_buffer;

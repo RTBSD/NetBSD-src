@@ -233,6 +233,7 @@ static void	urtwn_attach(device_t, device_t, void *);
 static int	urtwn_detach(device_t, int);
 static int	urtwn_activate(device_t, enum devact);
 
+// urtwn 挂在 usbdevif 总线上
 CFATTACH_DECL_NEW(urtwn, sizeof(struct urtwn_softc), urtwn_match,
     urtwn_attach, urtwn_detach, urtwn_activate);
 
@@ -549,6 +550,7 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 
 	/* XXX media locking needs revisiting */
 	mutex_init(&sc->sc_media_mtx, MUTEX_DEFAULT, IPL_SOFTUSB);
+	// 初始化 media, 负责 MAC 和 PHY 之间的连接
 	ieee80211_media_init_with_lock(ic,
 	    urtwn_media_change, ieee80211_media_status, &sc->sc_media_mtx);
 
@@ -785,7 +787,7 @@ urtwn_alloc_rx_list(struct urtwn_softc *sc)
 
 			data->sc = sc;	/* Backpointer for callbacks. */
 
-			// 每个 pipe 创建一个 xfer
+			// 每个 pipe 创建一个 xfer, xfer 和一个 pipe 关联
 			error = usbd_create_xfer(sc->rx_pipe[j], URTWN_RXBUFSZ,
 			    0, 0, &data->xfer);
 			if (error) {

@@ -106,23 +106,41 @@ static void ieee80211_node_table_cleanup(struct ieee80211_node_table *nt);
 
 MALLOC_DEFINE(M_80211_NODE, "80211node", "802.11 node state");
 
+// node 是无线网络中的一个节点，每一个使用 wifi 的设备都是一个 node
+//	在 AP 模式下，node 代表一个连接到该 AP 的客户端设备
+//	在 STATION 模式下，node 代表它所连接的 AP
 void
 ieee80211_node_attach(struct ieee80211com *ic)
 {
-
+	// 用于管理节点的方法，具体的驱动，如 rtwn 可能会重载这些方法
+	//	1. 创建新节点
 	ic->ic_node_alloc = node_alloc;
+	//  2. 删除节点
 	ic->ic_node_free = node_free;
+	//  3. 清理节点
 	ic->ic_node_cleanup = node_cleanup;
+	//  4. 获取特定节点的接收信号强度
 	ic->ic_node_getrssi = node_getrssi;
 
 	/* default station inactivity timer settings */
+	// 一个节点进入初始化状态后的超时时间。如果在这段时间内没有完成认证，就被视为超时
 	ic->ic_inact_init = IEEE80211_INACT_INIT;
+	// 一个节点已经通过认证后，等待关联的超时时间。如果在这段时间内没有完成关联，就被视为超时
 	ic->ic_inact_auth = IEEE80211_INACT_AUTH;
+	// 一个节点已经成功关联后，允许不活跃的时间。如果在这段时间内没有收发任何数据包，AP 就会认为它可能离开了网络
 	ic->ic_inact_run = IEEE80211_INACT_RUN;
+	// 超过 inact_run 时间后，AP 会主动向这个节点发送探测帧来“探活”。
+	//	这是给节点最后的机会来回应。如果 inact_probe 时间 内节点仍不回应，
+	//	AP 就会认定它已断开，并调用 node_free 将其销毁
 	ic->ic_inact_probe = IEEE80211_INACT_PROBE;
 
 	/* NB: driver should override */
+	// 设备关联到一个 AP，AP 会给设备分配一个唯一的 AID，在
+	//	后续通信中代替 MAC 地址，提高通信效率，ic_max_aid 就是 AP 模式下支持连接入
+	//  的设备最大数量，默认 127 个设备
 	ic->ic_max_aid = IEEE80211_AID_DEF;
+	// TIM(Traffic Indication Map), 当 AP 需要给某个休眠的设备发送数据时，
+	//	它会调用这个函数，去更新 TIM 位图
 	ic->ic_set_tim = ieee80211_set_tim;
 }
 

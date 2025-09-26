@@ -189,6 +189,7 @@ static int uhub_rescan(device_t, const char *, const int *);
 static void uhub_childdet(device_t, device_t);
 static int uhub_detach(device_t, int);
 
+// uhub 挂在 usb 总线上
 CFATTACH_DECL3_NEW(uhub, sizeof(struct uhub_softc), uhub_match,
     uhub_attach, uhub_detach, NULL, uhub_rescan, uhub_childdet,
     DVF_DETACH_SHUTDOWN);

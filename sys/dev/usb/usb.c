@@ -271,6 +271,7 @@ static void usb_childdet(device_t, device_t);
 static int usb_once_init(void);
 static void usb_doattach(device_t);
 
+// usb 总线挂在 xhci 上
 CFATTACH_DECL3_NEW(usb, sizeof(struct usb_softc),
     usb_match, usb_attach, usb_detach, usb_activate, NULL, usb_childdet,
     DVF_DETACH_SHUTDOWN);
@@ -329,6 +330,7 @@ usb_attach(device_t parent, device_t self, void *aux)
 	KASSERT(sc->sc_bus->ub_lock != NULL);
 
 	RUN_ONCE(&init_control, usb_once_init);
+	// 中断 ok 后调用 attach
 	config_interrupts(self, usb_doattach);
 }
 
@@ -486,6 +488,7 @@ usb_doattach(device_t self)
 	usb_add_event(USB_EVENT_CTRLR_ATTACH, ue);
 
 	sc->sc_attach_thread = curlwp;
+	// 首先创建 roothub device
 	err = usbd_new_device(self, sc->sc_bus, 0, speed, 0,
 		  &sc->sc_port);
 	sc->sc_attach_thread = NULL;
