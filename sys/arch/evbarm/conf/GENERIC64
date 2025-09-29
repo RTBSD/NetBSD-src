@@ -566,4 +566,7 @@ mpt*		at pci? dev ? function ?
 scsibus*	at scsi?
 sd*		at scsibus? target ? lun ?	# SCSI disk drives
 
+# WLAN support
+rtwn*	at pci? dev ? function ?	# Realtek 8188CE/8192CE 802.11b/g/n
+
 cinclude "arch/evbarm/conf/GENERIC64.local"
