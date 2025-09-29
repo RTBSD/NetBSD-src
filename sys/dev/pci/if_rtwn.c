@@ -68,7 +68,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_rtwn.c,v 1.20 2021/06/16 00:21:18 riastradh Exp $
 #ifdef RTWN_DEBUG
 #define DPRINTF(x)	do { if (rtwn_debug) printf x; } while (0)
 #define DPRINTFN(n, x)	do { if (rtwn_debug >= (n)) printf x; } while (0)
-int rtwn_debug = 4;
+int rtwn_debug = 2;
 #else
 #define DPRINTF(x)
 #define DPRINTFN(n, x)
@@ -2406,7 +2406,8 @@ rtwn_power_on(struct rtwn_softc *sc)
 	    R92C_CR_ENSEC;
 	rtwn_write_2(sc, R92C_CR, reg);
 
-	/* rtwn_write_1(sc, 0xfe10, 0x19); */
+	if (sc->chip & RTWN_CHIP_92C)
+		rtwn_write_1(sc, 0xfe10, 0x19);
 
 	DPRINTFN(3, ("%s: power-on done\n", device_xname(sc->sc_dev)));
 	return 0;
