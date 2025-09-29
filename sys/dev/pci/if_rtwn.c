@@ -63,10 +63,12 @@ __KERNEL_RCSID(0, "$NetBSD: if_rtwn.c,v 1.20 2021/06/16 00:21:18 riastradh Exp $
 #include <dev/ic/rtwn_data.h>
 #include <dev/pci/if_rtwnreg.h>
 
+/* #define RTWN_DEBUG */
+
 #ifdef RTWN_DEBUG
 #define DPRINTF(x)	do { if (rtwn_debug) printf x; } while (0)
 #define DPRINTFN(n, x)	do { if (rtwn_debug >= (n)) printf x; } while (0)
-int rtwn_debug = 0;
+int rtwn_debug = 4;
 #else
 #define DPRINTF(x)
 #define DPRINTFN(n, x)
@@ -742,36 +744,84 @@ rtwn_free_tx_list(struct rtwn_softc *sc, int qid)
 static void
 rtwn_write_1(struct rtwn_softc *sc, uint16_t addr, uint8_t val)
 {
+#ifdef RTWN_DEBUG
+	if (rtwn_debug >= 4) {
+		printf("%s 0x%x 0x%x\n", __func__, addr, val);
+	}
+#endif
+
 	bus_space_write_1(sc->sc_st, sc->sc_sh, addr, val);
 }
 
 static void
 rtwn_write_2(struct rtwn_softc *sc, uint16_t addr, uint16_t val)
 {
+#ifdef RTWN_DEBUG
+	if (rtwn_debug >= 4) {
+		printf("%s 0x%x 0x%x\n", __func__, addr, val);
+		if (addr % 2) {
+			panic("unaligned access\n");
+		}
+	}
+#endif
+
 	bus_space_write_2(sc->sc_st, sc->sc_sh, addr, htole16(val));
 }
 
 static void
 rtwn_write_4(struct rtwn_softc *sc, uint16_t addr, uint32_t val)
 {
+#ifdef RTWN_DEBUG
+	if (rtwn_debug >= 4) {
+		printf("%s 0x%x 0x%x\n", __func__, addr, val);
+		if (addr % 4) {
+			panic("unaligned access\n");
+		}
+	}
+#endif
+
 	bus_space_write_4(sc->sc_st, sc->sc_sh, addr, htole32(val));
 }
 
 static uint8_t
 rtwn_read_1(struct rtwn_softc *sc, uint16_t addr)
 {
+#ifdef RTWN_DEBUG
+	if (rtwn_debug >= 4) {
+		printf("%s 0x%x\n", __func__, addr);
+	}
+#endif
+
 	return bus_space_read_1(sc->sc_st, sc->sc_sh, addr);
 }
 
 static uint16_t
 rtwn_read_2(struct rtwn_softc *sc, uint16_t addr)
 {
+#ifdef RTWN_DEBUG
+	if (rtwn_debug >= 4) {
+		printf("%s 0x%x\n", __func__, addr);
+		if (addr % 2) {
+			panic("unaligned access\n");
+		}
+	}
+#endif
+
 	return le16toh(bus_space_read_2(sc->sc_st, sc->sc_sh, addr));
 }
 
 static uint32_t
 rtwn_read_4(struct rtwn_softc *sc, uint16_t addr)
 {
+#ifdef RTWN_DEBUG
+	if (rtwn_debug >= 4) {
+		printf("%s 0x%x\n", __func__, addr);
+		if (addr % 4) {
+			panic("unaligned access\n");
+		}
+	}
+#endif
+
 	return le32toh(bus_space_read_4(sc->sc_st, sc->sc_sh, addr));
 }
 
@@ -936,8 +986,8 @@ rtwn_efuse_read(struct rtwn_softc *sc)
 		printf("\n");
 		for (i = 0; i < sizeof(sc->rom); i++)
 			printf("%02x:", rom[i]);
+		}
 		printf("\n");
-	}
 #endif
 }
 
@@ -2245,6 +2295,8 @@ rtwn_power_on(struct rtwn_softc *sc)
 		return ETIMEDOUT;
 	}
 
+	DPRINTFN(3, ("%s: autoload done\n", device_xname(sc->sc_dev)));
+
 	/* Unlock ISO/CLK/Power control register. */
 	rtwn_write_1(sc, R92C_RSV_CTRL, 0);
 
@@ -2354,8 +2406,9 @@ rtwn_power_on(struct rtwn_softc *sc)
 	    R92C_CR_ENSEC;
 	rtwn_write_2(sc, R92C_CR, reg);
 
-	rtwn_write_1(sc, 0xfe10, 0x19);
+	/* rtwn_write_1(sc, 0xfe10, 0x19); */
 
+	DPRINTFN(3, ("%s: power-on done\n", device_xname(sc->sc_dev)));
 	return 0;
 }
 
@@ -3338,7 +3391,7 @@ rtwn_init(struct ifnet *ifp)
 	rtwn_write_1(sc, R92C_BCN_MAX_ERR, 0xff);
 	rtwn_write_1(sc, R92C_BCN_CTRL, R92C_BCN_CTRL_DIS_TSF_UDT0);
 
-	rtwn_write_4(sc, R92C_PIFS, 0x1c);
+	rtwn_write_2(sc, R92C_PIFS, 0x1c);
 	rtwn_write_4(sc, R92C_MCUTST_1, 0x0);
 
 	/* Load 8051 microcode. */
