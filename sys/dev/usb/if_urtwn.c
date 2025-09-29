@@ -233,6 +233,7 @@ static void	urtwn_attach(device_t, device_t, void *);
 static int	urtwn_detach(device_t, int);
 static int	urtwn_activate(device_t, enum devact);
 
+// urtwn 挂在 usbdevif 总线上
 CFATTACH_DECL_NEW(urtwn, sizeof(struct urtwn_softc), urtwn_match,
     urtwn_attach, urtwn_detach, urtwn_activate);
 
@@ -357,6 +358,7 @@ urtwn_match(device_t parent, cfdata_t match, void *aux)
 {
 	struct usb_attach_arg *uaa = aux;
 
+	// USB 设备已知匹配
 	return urtwn_lookup(urtwn_devs, uaa->uaa_vendor, uaa->uaa_product) !=
 	    NULL ?  UMATCH_VENDOR_PRODUCT : UMATCH_NONE;
 }
@@ -380,6 +382,7 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 	sc->sc_udev = uaa->uaa_device;
 
 	sc->chip = 0;
+	// 根据型号获取 urtwn_dev 静态实例
 	dev = urtwn_lookup(urtwn_devs, uaa->uaa_vendor, uaa->uaa_product);
 	if (dev != NULL && ISSET(dev->flags, FLAG_RTL8188E))
 		SET(sc->chip, URTWN_CHIP_88E);
@@ -399,8 +402,11 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 	USETW(req.wIndex, UHF_PORT_SUSPEND);
 	USETW(req.wLength, 0);
 
+	// 关闭 remote wakeup
 	(void) usbd_do_request(sc->sc_udev, &req, 0);
 
+	// 创建一个信号量，如果异步任务 urtwn_task 处理完成，就发送信号
+	//  网络接口的销毁等都会等待这个信号量完成
 	cv_init(&sc->sc_task_cv, "urtwntsk");
 	mutex_init(&sc->sc_task_mtx, MUTEX_DEFAULT, IPL_NET);
 	mutex_init(&sc->sc_tx_mtx, MUTEX_DEFAULT, IPL_NONE);
@@ -408,8 +414,10 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 	mutex_init(&sc->sc_fwcmd_mtx, MUTEX_DEFAULT, IPL_NONE);
 	mutex_init(&sc->sc_write_mtx, MUTEX_DEFAULT, IPL_NONE);
 
+	// 创建任务处理线程
 	usb_init_task(&sc->sc_task, urtwn_task, sc, 0);
 
+	// 创建一个扫描和校正的 timeout 任务
 	callout_init(&sc->sc_scan_to, 0);
 	callout_setfunc(&sc->sc_scan_to, urtwn_next_scan, sc);
 	callout_init(&sc->sc_calib_to, 0);
@@ -418,6 +426,7 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 	rnd_attach_source(&sc->rnd_source, device_xname(sc->sc_dev),
 	    RND_TYPE_NET, RND_FLAG_DEFAULT);
 
+	// 选择配置0
 	error = usbd_set_config_no(sc->sc_udev, 1, 0);
 	if (error != 0) {
 		aprint_error_dev(self, "failed to set configuration"
@@ -432,6 +441,7 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 		goto fail;
 	}
 
+	// 读芯片 id 确定型号
 	error = urtwn_read_chipid(sc);
 	if (error != 0) {
 		aprint_error_dev(self, "unsupported test chip\n");
@@ -450,12 +460,14 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 		sc->nrxchains = 1;
 	}
 
+	// 读不同型号的 ROM
 	if (ISSET(sc->chip, URTWN_CHIP_88E) ||
 	    ISSET(sc->chip, URTWN_CHIP_92EU))
 		urtwn_r88e_read_rom(sc);
 	else
 		urtwn_read_rom(sc);
 
+	// 打印外设型号
 	aprint_normal_dev(self, "MAC/BB RTL%s, RF 6052 %zdT%zdR, address %s\n",
 	    (sc->chip & URTWN_CHIP_92EU) ? "8192EU" :
 	    (sc->chip & URTWN_CHIP_92C) ? "8192CU" :
@@ -465,11 +477,13 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 	    "8188CUS", sc->ntxchains, sc->nrxchains,
 	    ether_sprintf(ic->ic_myaddr));
 
+	// 打开数据收发用的 pipes
 	error = urtwn_open_pipes(sc);
 	if (error != 0) {
 		aprint_error_dev(sc->sc_dev, "could not open pipes\n");
 		goto fail;
 	}
+	// 驱动使用的 USB 端点信息
 	aprint_normal_dev(self, "%d rx pipe%s, %d tx pipe%s\n",
 	    sc->rx_npipe, sc->rx_npipe > 1 ? "s" : "",
 	    sc->tx_npipe, sc->tx_npipe > 1 ? "s" : "");
@@ -507,27 +521,36 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 
 	ifp->if_softc = sc;
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
+	// 网络接口初始化
 	ifp->if_init = urtwn_init;
 	ifp->if_ioctl = urtwn_ioctl;
+	// 网络接口发送
 	ifp->if_start = urtwn_start;
 	ifp->if_watchdog = urtwn_watchdog;
 	IFQ_SET_READY(&ifp->if_snd);
 	memcpy(ifp->if_xname, device_xname(sc->sc_dev), IFNAMSIZ);
 
+	// 初始化网络接口
 	if_initialize(ifp);
+	// 初始化80211栈接口
 	ieee80211_ifattach(ic);
 
 	/* override default methods */
+	// 在 station 模式，更新 station 连接的 AP
 	ic->ic_newassoc = urtwn_newassoc;
 	ic->ic_reset = urtwn_reset;
+	//  无线多媒体扩展 (Wireless Multimedia Extension) 支持
+	//   是一种 QoS 技术
 	ic->ic_wme.wme_update = urtwn_wme_update;
 
 	/* Override state transition machine. */
 	sc->sc_newstate = ic->ic_newstate;
+	// 硬件状态机支持
 	ic->ic_newstate = urtwn_newstate;
 
 	/* XXX media locking needs revisiting */
 	mutex_init(&sc->sc_media_mtx, MUTEX_DEFAULT, IPL_SOFTUSB);
+	// 初始化 media, 负责 MAC 和 PHY 之间的连接
 	ieee80211_media_init_with_lock(ic,
 	    urtwn_media_change, ieee80211_media_status, &sc->sc_media_mtx);
 
@@ -535,7 +558,9 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 	    sizeof(struct ieee80211_frame) + IEEE80211_RADIOTAP_HDRLEN,
 	    &sc->sc_drvbpf);
 
+	// rtwn 的 radiotap 头长度
 	sc->sc_rxtap_len = sizeof(sc->sc_rxtapu);
+	// 给 80211 栈设置上 radiotap 头
 	sc->sc_rxtap.wr_ihdr.it_len = htole16(sc->sc_rxtap_len);
 	sc->sc_rxtap.wr_ihdr.it_present = htole32(URTWN_RX_RADIOTAP_PRESENT);
 
@@ -543,7 +568,9 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 	sc->sc_txtap.wt_ihdr.it_len = htole16(sc->sc_txtap_len);
 	sc->sc_txtap.wt_ihdr.it_present = htole32(URTWN_TX_RADIOTAP_PRESENT);
 
+	// 创建 per-cpu 网络队列，避免 SMP 系统中加锁带来的性能损失
 	ifp->if_percpuq = if_percpuq_create(ifp);
+	// 注册网络接口
 	if_register(ifp);
 
 	ieee80211_announce(ic);
@@ -553,6 +580,7 @@ urtwn_attach(device_t parent, device_t self, void *aux)
 	if (!pmf_device_register(self, NULL, NULL))
 		aprint_error_dev(self, "couldn't establish power handler\n");
 
+	// 设备 attach 成功
 	SET(sc->sc_flags, URTWN_FLAG_ATTACHED);
 	return;
 
@@ -644,12 +672,15 @@ urtwn_open_pipes(struct urtwn_softc *sc)
 	URTWNHIST_FUNC(); URTWNHIST_CALLED();
 
 	/* Determine the number of bulk-out pipes. */
+	// 获取设备的接口描述符
 	id = usbd_get_interface_descriptor(sc->sc_iface);
 	for (i = 0; i < id->bNumEndpoints; i++) {
+		// 遍历接口对应的各个端点
 		ed = usbd_interface2endpoint_descriptor(sc->sc_iface, i);
 		if (ed == NULL || UE_GET_XFERTYPE(ed->bmAttributes) != UE_BULK) {
 			continue;
 		}
+		// 记录 IN/OUT 端点的地址
 		if (UE_GET_DIR(ed->bEndpointAddress) == UE_DIR_OUT) {
 			if (ntx < sizeof(epaddr))
 				epaddr[ntx] = ed->bEndpointAddress;
@@ -673,11 +704,13 @@ urtwn_open_pipes(struct urtwn_softc *sc)
 	}
 	DPRINTFN(DBG_INIT, "found %jd/%jd bulk-in/out pipes",
 	    nrx, ntx, 0, 0);
+	// 记录 IN/OUT 端点的数目
 	sc->rx_npipe = nrx;
 	sc->tx_npipe = ntx;
 
 	/* Open bulk-in pipe at address 0x81. */
 	for (i = 0; i < nrx; i++) {
+		// 打开对应的批量传输端点
 		error = usbd_open_pipe(sc->sc_iface, rxepaddr[i],
 		    USBD_EXCLUSIVE_USE, &sc->rx_pipe[i]);
 		if (error != 0) {
@@ -754,6 +787,7 @@ urtwn_alloc_rx_list(struct urtwn_softc *sc)
 
 			data->sc = sc;	/* Backpointer for callbacks. */
 
+			// 每个 pipe 创建一个 xfer, xfer 和一个 pipe 关联
 			error = usbd_create_xfer(sc->rx_pipe[j], URTWN_RXBUFSZ,
 			    0, 0, &data->xfer);
 			if (error) {
@@ -896,6 +930,8 @@ urtwn_task(void *arg)
 	    (ic->ic_opmode == IEEE80211_M_HOSTAP ||
 	    ic->ic_opmode == IEEE80211_M_IBSS)) {
 
+		// 如果当前工作在 AP 状态，需要发送信标帧（beacon）用于广播
+		//	当前 AP 的 SSID，连接速率和加密方式等信息
 		struct mbuf *m = ieee80211_beacon_alloc(ic, ic->ic_bss,
 		    &sc->sc_bo);
 		if (m == NULL) {
@@ -903,6 +939,7 @@ urtwn_task(void *arg)
 			    "could not allocate beacon");
 		}
 
+		// 通过 USB 总线发送信标帧
 		if (urtwn_tx_beacon(sc, m, ic->ic_bss) != 0) {
 			aprint_error_dev(sc->sc_dev, "could not send beacon\n");
 		}
@@ -914,7 +951,9 @@ urtwn_task(void *arg)
 	/* Process host commands. */
 	s = splusb();
 	mutex_spin_enter(&sc->sc_task_mtx);
+	// 打印命令队列的信息
 	urtwn_cmdq_invariants(sc);
+	// 在 sc_task_mtx spin lock 的保护中操作命令队列 ring
 	while (ring->next != ring->cur) {
 		KASSERTMSG(ring->queued > 0, "%s: cur=%d next=%d queued=%d",
 		    device_xname(sc->sc_dev),
@@ -923,6 +962,7 @@ urtwn_task(void *arg)
 		mutex_spin_exit(&sc->sc_task_mtx);
 		splx(s);
 		/* Invoke callback with kernel lock held. */
+		// 执行具体的操作，如 urtwn_calib_to_cb，urtwn_newstate_cb 和 urtwn_wme_update_cb
 		cmd->cb(sc, cmd->data);
 		s = splusb();
 		mutex_spin_enter(&sc->sc_task_mtx);
@@ -933,6 +973,7 @@ urtwn_task(void *arg)
 		ring->queued--;
 		ring->next = (ring->next + 1) % URTWN_HOST_CMD_RING_COUNT;
 	}
+	// 发布信号，任务执行完成
 	cv_broadcast(&sc->sc_task_cv);
 	mutex_spin_exit(&sc->sc_task_mtx);
 	splx(s);
@@ -972,6 +1013,7 @@ urtwn_do_async(struct urtwn_softc *sc, void (*cb)(struct urtwn_softc *, void *),
 	mutex_spin_exit(&sc->sc_task_mtx);
 	splx(s);
 
+	// 执行任务 urtwn_task
 	if (schedtask)
 		usb_add_task(sc->sc_udev, &sc->sc_task, USB_TASKQ_DRIVER);
 }
@@ -1896,6 +1938,7 @@ urtwn_next_scan(void *arg)
 		return;
 
 	s = splnet();
+	// 调用协议栈的扫描功能
 	if (sc->sc_ic.ic_state == IEEE80211_S_SCAN)
 		ieee80211_next_scan(&sc->sc_ic);
 	splx(s);
@@ -1932,6 +1975,7 @@ urtwn_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg)
 	/* Do it in a process context. */
 	cmd.state = nstate;
 	cmd.arg = arg;
+	// 异步任务提交接口
 	urtwn_do_async(sc, urtwn_newstate_cb, &cmd, sizeof(cmd));
 	return 0;
 }
@@ -1954,6 +1998,7 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 	s = splnet();
 	mutex_enter(&sc->sc_write_mtx);
 
+	// 如果有 scan 或者校正任务，停止
 	callout_stop(&sc->sc_scan_to);
 	callout_stop(&sc->sc_calib_to);
 
@@ -1962,6 +2007,7 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 		break;
 
 	case IEEE80211_S_SCAN:
+		// 状态机是停止扫描
 		if (nstate != IEEE80211_S_SCAN) {
 			/*
 			 * End of scanning
@@ -1981,6 +2027,7 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 		break;
 
 	case IEEE80211_S_RUN:
+		// 从运行状态离开，先关掉 LED 灯
 		/* Turn link LED off. */
 		urtwn_set_led(sc, URTWN_LED_LINK, 0);
 
@@ -2023,11 +2070,13 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 
 	switch (nstate) {
 	case IEEE80211_S_INIT:
+		// 状态是刚开始初始化
 		/* Turn link LED off. */
 		urtwn_set_led(sc, URTWN_LED_LINK, 0);
 		break;
 
 	case IEEE80211_S_SCAN:
+		// 状态是开始扫描
 		if (ostate != IEEE80211_S_SCAN) {
 			/*
 			 * Begin of scanning
@@ -2072,11 +2121,13 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 		    IEEE80211_HTINFO_2NDCHAN_NONE);
 
 		/* Start periodic scan. */
+		// 启动扫描流程，主要由 80211 协议栈完成
 		if (!sc->sc_dying)
 			callout_schedule(&sc->sc_scan_to, hz / 5);
 		break;
 
 	case IEEE80211_S_AUTH:
+		// 状态是开始认证
 		/* Set initial gain under link. */
 		reg = urtwn_bb_read(sc, R92C_OFDM0_AGCCORE1(0));
 		reg = RW(reg, R92C_OFDM0_AGCCORE1_GAIN, 0x32);
@@ -2104,12 +2155,14 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 		break;
 
 	case IEEE80211_S_RUN:
+		// 状态是开始运行
 		ni = ic->ic_bss;
 
 		/* XXX: Set 20MHz mode */
 		urtwn_set_chan(sc, ic->ic_curchan,
 		    IEEE80211_HTINFO_2NDCHAN_NONE);
 
+		// 如果是 Monitor 模式（一般不会走这里）
 		if (ic->ic_opmode == IEEE80211_M_MONITOR) {
 			/* Back to 20MHz mode */
 			urtwn_set_chan(sc, ic->ic_curchan,
@@ -2160,6 +2213,7 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 		msr &= R92C_MSR_MASK;
 		switch (ic->ic_opmode) {
 		case IEEE80211_M_STA:
+			// 设置是 Station 模式
 			/* Allow Rx from our BSSID only. */
 			urtwn_write_4(sc, R92C_RCR,
 			    urtwn_read_4(sc, R92C_RCR) |
@@ -2171,6 +2225,7 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 			msr |= R92C_MSR_INFRA;
 			break;
 		case IEEE80211_M_HOSTAP:
+			// 设置是 Ap 模式
 			urtwn_write_2(sc, R92C_BCNTCFG, 0x000f);
 
 			/* Allow Rx from any BSSID. */
@@ -2205,7 +2260,7 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 		if (ISSET(sc->chip, URTWN_CHIP_88E) ||
 		    ISSET(sc->chip, URTWN_CHIP_92EU))
 			ni->ni_txrate = ni->ni_rates.rs_nrates - 1;
-		else
+		else // 速率自适应
 			urtwn_ra_init(sc);
 
 		/* Turn link LED on. */
@@ -2224,6 +2279,7 @@ urtwn_newstate_cb(struct urtwn_softc *sc, void *arg)
 		break;
 	}
 
+	// 执行 80211 栈默认的状态机流程
 	(*sc->sc_newstate)(ic, nstate, cmd->arg);
 
 	mutex_exit(&sc->sc_write_mtx);
@@ -2468,6 +2524,7 @@ urtwn_rx_frame(struct urtwn_softc *sc, uint8_t *buf, int pktlen)
 	DPRINTFN(DBG_RX, "Rx frame len=%jd rate=%jd infosz=%jd rssi=%jd",
 	    pktlen, rate, infosz, rssi);
 
+	// 创建一个 mbuf，里面包含一个 packet header
 	MGETHDR(m, M_DONTWAIT, MT_DATA);
 	if (__predict_false(m == NULL)) {
 		aprint_error_dev(sc->sc_dev, "couldn't allocate rx mbuf\n");
@@ -2476,6 +2533,7 @@ urtwn_rx_frame(struct urtwn_softc *sc, uint8_t *buf, int pktlen)
 		return;
 	}
 	if (pktlen > (int)MHLEN) {
+		// 如果接收到的数据比 packet header 长，再分配 mbuf cluster
 		MCLGET(m, M_DONTWAIT);
 		if (__predict_false(!(m->m_flags & M_EXT))) {
 			aprint_error_dev(sc->sc_dev,
@@ -2488,13 +2546,18 @@ urtwn_rx_frame(struct urtwn_softc *sc, uint8_t *buf, int pktlen)
 	}
 
 	/* Finalize mbuf. */
+	// 设置 mbuf 关联的网络接口 ifp
 	m_set_rcvif(m, ifp);
+	// 获取接收的数据帧
 	wh = (struct ieee80211_frame *)((uint8_t *)&stat[1] + infosz);
+	// 将接收的数据帧拷贝到 mbuf 中，设置数据长度
 	memcpy(mtod(m, uint8_t *), wh, pktlen);
 	m->m_pkthdr.len = m->m_len = pktlen;
 
+	// 协议栈处理数据过程中，暂时关闭网络软中断，不处理新的数据
 	s = splnet();
 	if (__predict_false(sc->sc_drvbpf != NULL)) {
+		// 获取接收 radiotap 头
 		struct urtwn_rx_radiotap_header *tap = &sc->sc_rxtap;
 
 		tap->wr_flags = 0;
@@ -2526,17 +2589,22 @@ urtwn_rx_frame(struct urtwn_softc *sc, uint8_t *buf, int pktlen)
 		bpf_mtap2(sc->sc_drvbpf, tap, sc->sc_rxtap_len, m, BPF_D_IN);
 	}
 
+	// 从接收帧获取接收管理的 80211 node，增加 node 的引用计数
 	ni = ieee80211_find_rxnode(ic, (struct ieee80211_frame_min *)wh);
 
 	/* push the frame up to the 802.11 stack */
+	// 将接收到数据推送给 80211 协议，以 mbuf 进行管理
 	ieee80211_input(ic, m, ni, rssi, 0);
 
 	/* Node is no longer needed. */
+	// 如果 node 的引用计数变成 0， 会释放 node
 	ieee80211_free_node(ni);
 
+	// 打开网络软中断，继续接收网络包
 	splx(s);
 }
 
+// USB 端点接收到数据后，进入接收处理流程
 static void
 urtwn_rxeof(struct usbd_xfer *xfer, void *priv, usbd_status status)
 {
@@ -2564,15 +2632,19 @@ urtwn_rxeof(struct usbd_xfer *xfer, void *priv, usbd_status status)
 			goto resubmit;
 		return;
 	}
+	// 获取接收结果，这里是获取接收到数据的数量
 	usbd_get_xfer_status(xfer, NULL, NULL, &len, NULL);
 
 	if (__predict_false(len < (int)sizeof(*stat))) {
+		// 收到的数据不完整，走重发流程
 		DPRINTFN(DBG_RX, "xfer too short %jd", len, 0, 0, 0);
 		goto resubmit;
 	}
+	// 获取传输用的描述符
 	buf = data->buf;
 
 	/* Get the number of encapsulated frames. */
+	// 收到帧的数目
 	stat = (struct r92c_rx_desc_usb *)buf;
 	if (ISSET(sc->chip, URTWN_CHIP_92EU))
 		npkts = MS(le32toh(stat->rxdw2), R92E_RXDW2_PKTCNT);
@@ -2580,10 +2652,12 @@ urtwn_rxeof(struct usbd_xfer *xfer, void *priv, usbd_status status)
 		npkts = MS(le32toh(stat->rxdw2), R92C_RXDW2_PKTCNT);
 	DPRINTFN(DBG_RX, "Rx %jd frames in one chunk", npkts, 0, 0, 0);
 
+	// 统计收到的帧 ++
 	if (npkts != 0)
 		rnd_add_uint32(&sc->rnd_source, npkts);
 
 	/* Process all of them. */
+	// 处理收到的数据
 	while (npkts-- > 0) {
 		if (__predict_false(len < (int)sizeof(*stat))) {
 			DPRINTFN(DBG_RX, "len(%jd) is short than header",
@@ -2610,15 +2684,18 @@ urtwn_rxeof(struct usbd_xfer *xfer, void *priv, usbd_status status)
 		}
 
 		/* Process 802.11 frame. */
+		// 处理接收到的单帧
 		urtwn_rx_frame(sc, buf, pktlen);
 
 		/* Next chunk is 128-byte aligned. */
 		totlen = roundup2(totlen, 128);
+		// 处理后续的接收帧
 		buf += totlen;
 		len -= totlen;
 	}
 
  resubmit:
+	// 设置好 usb xfer, 准备下次接收
 	/* Setup a new transfer. */
 	usbd_setup_xfer(xfer, data, data->buf, URTWN_RXBUFSZ,
 	    USBD_SHORT_XFER_OK, USBD_NO_TIMEOUT, urtwn_rxeof);
@@ -2741,6 +2818,7 @@ urtwn_tx(struct urtwn_softc *sc, struct mbuf *m, struct ieee80211_node *ni,
 		padsize = 0;
 
 	/* Fill Tx descriptor. */
+	// 填充描述符，这块完全是黑盒子，没有文档可以知道填的是什么
 	txd = (struct r92c_tx_desc_usb *)data->buf;
 	memset(txd, 0, txd_len + padsize);
 
@@ -2854,18 +2932,24 @@ urtwn_tx(struct urtwn_softc *sc, struct mbuf *m, struct ieee80211_node *ni,
 	}
 
 	/* Compute Tx descriptor checksum. */
+	// 计算发送描述符的校验码
 	sum = 0;
 	for (i = 0; i < R92C_TXDESC_SUMSIZE / 2; i++)
 		sum ^= ((uint16_t *)txd)[i];
 	txd->txdsum = sum;	/* NB: already little endian. */
 
+	// 发送数据的长度
 	xferlen = txd_len + m->m_pkthdr.len + padsize;
+	// 从 mbuf 中拷贝 m->m_pkthdr.len 长的数据到 DMA 描述符的中指定的缓冲区
 	m_copydata(m, 0, m->m_pkthdr.len, (char *)&txd[0] + txd_len + padsize);
 
 	s = splnet();
+	// 创建发送传输，发送完成后调用 urtwn_txeof
+	//  传输用 usb_xfer, DMA 描述符 data->buf, 传输长度 xferlen
 	usbd_setup_xfer(data->xfer, data, data->buf, xferlen,
 	    USBD_FORCE_SHORT_XFER, URTWN_TX_TIMEOUT,
 	    urtwn_txeof);
+	// 启动发送
 	error = usbd_transfer(data->xfer);
 	if (__predict_false(error != USBD_NORMAL_COMPLETION &&
 	    error != USBD_IN_PROGRESS)) {
@@ -2907,13 +2991,16 @@ urtwn_start(struct ifnet *ifp)
 	if ((ifp->if_flags & (IFF_RUNNING | IFF_OACTIVE)) != IFF_RUNNING)
 		return;
 
+	// 网络协议栈将数据准备好，然后通过 if_start 回调调用到 urtwn_start
 	data = NULL;
 	for (;;) {
 		/* Send pending management frames first. */
+		// 首先从管理帧队列获取需要发送的数据，通过 mbuf 管理发送数据
 		IF_POLL(&ic->ic_mgtq, m);
 		if (m != NULL) {
 			/* Use AC_VO for management frames. */
-
+			// 有数据，获取一个用于发送管理帧的 usb xfer，WME_AC_VO 是 Qos 保障最高，实时性最强
+			//	的信道
 			data = urtwn_get_tx_data(sc, sc->ac2idx[WME_AC_VO]);
 
 			if (data == NULL) {
@@ -2922,9 +3009,12 @@ urtwn_start(struct ifnet *ifp)
 				    0, 0, 0, 0);
 				return;
 			}
+			// 发送完成，准备发送的数据从管理帧队列出列
 			IF_DEQUEUE(&ic->ic_mgtq, m);
+			// 获取 mbuf 的 context，即管理的 80211 node
 			ni = M_GETCTX(m, struct ieee80211_node *);
 			M_CLEARCTX(m);
+			// 跳转去发送管理帧
 			goto sendit;
 		}
 		if (ic->ic_state != IEEE80211_S_RUN)
@@ -2988,6 +3078,7 @@ urtwn_start(struct ifnet *ifp)
  sendit:
 		bpf_mtap3(ic->ic_rawbpf, m, BPF_D_OUT);
 
+		// 将发送数据 m 和发送用的 usb xfer (data) 传下去
 		if (urtwn_tx(sc, m, ni, data) != 0) {
 			m_freem(m);
 			ieee80211_free_node(ni);
@@ -4789,6 +4880,7 @@ urtwn_init(struct ifnet *ifp)
 
 	URTWNHIST_FUNC(); URTWNHIST_CALLED();
 
+	// 先走一遍去初始化流程
 	urtwn_stop(ifp, 0);
 
 	mutex_enter(&sc->sc_write_mtx);
@@ -4804,6 +4896,7 @@ urtwn_init(struct ifnet *ifp)
 	mutex_exit(&sc->sc_fwcmd_mtx);
 
 	/* Allocate Tx/Rx buffers. */
+	// 分配接收/发送链表
 	error = urtwn_alloc_rx_list(sc);
 	if (error != 0) {
 		aprint_error_dev(sc->sc_dev,
@@ -5015,9 +5108,11 @@ urtwn_init(struct ifnet *ifp)
 	for (size_t j = 0; j < sc->rx_npipe; j++) {
 		for (i = 0; i < URTWN_RX_LIST_COUNT; i++) {
 			data = &sc->rx_data[j][i];
+			// 设置好 USB 传输，接收到数据后调用 urtwn_rxeof
 			usbd_setup_xfer(data->xfer, data, data->buf,
 			    URTWN_RXBUFSZ, USBD_SHORT_XFER_OK, USBD_NO_TIMEOUT,
 			    urtwn_rxeof);
+			// 启动接收
 			error = usbd_transfer(data->xfer);
 			if (__predict_false(error != USBD_NORMAL_COMPLETION &&
 			    error != USBD_IN_PROGRESS))

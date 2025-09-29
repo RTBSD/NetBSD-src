@@ -117,23 +117,38 @@ ieee80211_proto_attach(struct ieee80211com *ic)
 	struct ifnet *ifp = ic->ic_ifp;
 
 	/* XXX room for crypto  */
+	// 设置网络接口的数据帧头部长度
 	ifp->if_hdrlen = sizeof(struct ieee80211_qosframe_addr4);
 
+	// 与传输行为和协议策略相关的默认值设置
+	//  RTS/CTS 阈值：当要发送的数据帧长度超过此阈值时，会先发送 RTS（Request to Send）帧以避免碰撞
 	ic->ic_rtsthreshold = IEEE80211_RTS_DEFAULT;
+	//	分片阈值：当数据帧超过此长度时会被分割成多个小帧传输。
+	//	默认值通常是未设置或者为 IEEE 802.11 MTU 大小（如 2346 字节）
 	ic->ic_fragthreshold = IEEE80211_FRAG_DEFAULT;
+	//	固定速率设置为“无”，即不强制使用固定速率（可根据信号条件自动选择速率）
 	ic->ic_fixed_rate = IEEE80211_FIXED_RATE_NONE;
+	//	最大信标丢失数（Beacon Miss Limit）：超出此数量未收到 AP 的信标，即认为连接已断开
 	ic->ic_bmiss_max = IEEE80211_BMISS_MAX;
+	//	多播帧的发送速率默认值
 	ic->ic_mcast_rate = IEEE80211_MCAST_RATE_DEFAULT;
+	//	保护机制模式：使用 CTS-to-Self 来保护某些帧传输免受旧设备干扰
 	ic->ic_protmode = IEEE80211_PROT_CTSONLY;
+	//	漫游策略：设为自动，由协议栈自主判断是否切换当前连接的 AP
 	ic->ic_roaming = IEEE80211_ROAMING_AUTO;
 
+	// 设置一个用于切换高优先级/低优先级模式的迟滞值，
+	//	用于 WME（Wi-Fi Multimedia Extensions）增强数据传输的调度策略，
+	//	优化音视频流质量
 	ic->ic_wme.wme_hipri_switch_hysteresis =
 		AGGRESSIVE_MODE_SWITCH_HYSTERESIS;
 
 	/* protocol state change handler */
+	// 80211 的有限状态机切换回调
 	ic->ic_newstate = ieee80211_newstate;
 
 	/* initialize management frame handlers */
+	// 收发管理帧（Beacon, Probe, Auth, Assoc Request/Respons）的回调
 	ic->ic_recv_mgmt = ieee80211_recv_mgmt;
 	ic->ic_send_mgmt = ieee80211_send_mgmt;
 }

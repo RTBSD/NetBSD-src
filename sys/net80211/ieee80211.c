@@ -106,15 +106,20 @@ ieee80211_add_vap(struct ieee80211com *ic)
 	int s;
 	u_int8_t b;
 
+	// 阻塞网络软中断
 	s = splnet();
 	ic->ic_vap = 0;
+	// 遍历 vap 位图， 8 个 VAP ID 都已被占用，ic_vap 增加 8
 	for (i = 0; i < N(ieee80211_vapmap) && ieee80211_vapmap[i] == 0xff; i++)
 		ic->ic_vap += NBBY;
 	if (i == N(ieee80211_vapmap))
 		panic("vap table full");
+	// 找到一个可用的位图，然后找到第一个 = 0 的位
 	for (b = ieee80211_vapmap[i]; b & 1; b >>= 1)
 		ic->ic_vap++;
+	// 标记 ic_vap 已被占用
 	setbit(ieee80211_vapmap, ic->ic_vap);
+	// 把 ic 加入全局链表
 	SLIST_INSERT_HEAD(&ieee80211_list, ic, ic_next);
 	splx(s);
 #undef N
@@ -162,33 +167,46 @@ ieee80211_init_link_state(struct ieee80211com *ic)
 	 * That leaves BSS mode, which starts off DOWN and will
 	 * transition to UP when it joins a node.
 	 */
+	// 链路 down 状态
 	switch (ic->ic_opmode) {
 	case IEEE80211_M_AHDEMO:
 	case IEEE80211_M_HOSTAP:
 	case IEEE80211_M_IBSS:
+		// 不需要连接 AP 的模式，这类模式不依赖“连接到某个 AP”的状态，没有 UP/DOWN 的说法
 		if_link_state_change(ifp, LINK_STATE_UNKNOWN);
 		break;
 	default:
+		// 需要连接 AP 的模式，现在没有连接 AP，状态是 DOWN
 		if_link_state_change(ifp, LINK_STATE_DOWN);
 		break;
 	}
 }
 
+// 初始化 802.11 网络接口内部
+// ic：802.11 栈的核心实例
 void
 ieee80211_ifattach(struct ieee80211com *ic)
 {
+	// 802.11 网络接口对应的上层网络栈接口
 	struct ifnet *ifp = ic->ic_ifp;
 	struct ieee80211_channel *c;
 	int i;
 
 #ifdef __NetBSD__
+	// 第一次进入进行 net80211 的初始化
 	ieee80211_init();
 #endif /* __NetBSD__ */
 
+	// 将上层网络接口关联到以太网协议栈，注册到 L2 层
+	//		关联 MAC 地址（ic_myaddr）到系统接口
+	//		允许接口接收 ARP/IP 等以太网帧，能够使用默认的以太网数据处理回调
 	ether_ifattach(ifp, ic->ic_myaddr);
 	bpf_attach2(ifp, DLT_IEEE802_11,
 	    sizeof(struct ieee80211_frame_addr4), &ic->ic_rawbpf);
 
+	// 初始化加密算法的支持 如 WEP、CCMP、TKIP
+	//   注册密钥协商机制，如 WPA/WPA2/WPA3
+	//	 选择硬件加密或者软件加密（默认）
 	ieee80211_crypto_attach(ic);
 
 	/*
@@ -198,12 +216,15 @@ ieee80211_ifattach(struct ieee80211com *ic)
 	 */
 	memset(ic->ic_chan_avail, 0, sizeof(ic->ic_chan_avail));
 	ic->ic_modecaps |= 1<<IEEE80211_MODE_AUTO;
+	// 遍历所有硬件支持的信道
 	for (i = 0; i <= IEEE80211_CHAN_MAX; i++) {
 		c = &ic->ic_channels[i];
+		// 在 rtwn 驱动中设置了 ic_flags，表示硬件是支持这个信道的
 		if (c->ic_flags) {
 			/*
 			 * Verify driver passed us valid data.
 			 */
+			// 检查确认一次信道是 valid
 			if (i != ieee80211_chan2ieee(ic, c)) {
 				if_printf(ifp, "bad channel ignored; "
 					"freq %u flags %x number %u\n",
@@ -211,10 +232,13 @@ ieee80211_ifattach(struct ieee80211com *ic)
 				c->ic_flags = 0;	/* NB: remove */
 				continue;
 			}
+			// 在 avail 位图中置位，这个信道可用
 			setbit(ic->ic_chan_avail, i);
 			/*
 			 * Identify mode capabilities.
 			 */
+			// 信道可能支持多种 802.11 模式，只要有一个信道支持 a/b/g 中的模式
+			//	整个设备就支持，在 ic 上置位
 			if (IEEE80211_IS_CHAN_A(c))
 				ic->ic_modecaps |= 1<<IEEE80211_MODE_11A;
 			if (IEEE80211_IS_CHAN_B(c))
@@ -229,11 +253,13 @@ ieee80211_ifattach(struct ieee80211com *ic)
 				ic->ic_modecaps |= 1<<IEEE80211_MODE_TURBO_G;
 			if (ic->ic_curchan == NULL) {
 				/* arbitrarily pick the first channel */
+				// 选择第一个 available 信道为当前信道
 				ic->ic_curchan = &ic->ic_channels[i];
 			}
 		}
 	}
 	/* validate ic->ic_curmode */
+	// 如果模式和信道信息不匹配，回退到 AUTO 模式
 	if ((ic->ic_modecaps & (1<<ic->ic_curmode)) == 0)
 		ic->ic_curmode = IEEE80211_MODE_AUTO;
 	ic->ic_des_chan = IEEE80211_CHAN_ANYC;	/* any channel is ok */
@@ -244,33 +270,50 @@ ieee80211_ifattach(struct ieee80211com *ic)
 	if (ic->ic_caps & IEEE80211_C_WME)
 		ic->ic_flags |= IEEE80211_F_WME;
 #endif
+	// 设置无线设备的工作模式 802.11 a/b/g 等
 	(void) ieee80211_setmode(ic, ic->ic_curmode);
 
+	// 设置信标帧广播间隔，这个是给 AP 模式用的，如果无线设备工作在 AP 模式，需要
+	//	周期性的广播信标帧，通知周围接入设备，当前 AP 的接入信息
 	if (ic->ic_bintval == 0)
 		ic->ic_bintval = IEEE80211_BINTVAL_DEFAULT;
+	// 信标帧超时时间
 	ic->ic_bmisstimeout = 7*ic->ic_bintval;	/* default 7 beacons */
+	// DTIM 周期
 	ic->ic_dtim_period = IEEE80211_DTIM_DEFAULT;
 	IEEE80211_BEACON_LOCK_INIT(ic, "beacon");
 
+	// 监听间隔时间
 	if (ic->ic_lintval == 0)
 		ic->ic_lintval = ic->ic_bintval;
+	// 最大发射功率
 	ic->ic_txpowlimit = IEEE80211_TXPOWER_MAX;
 
+	// 将 802.11 接口实例添加到全局实例链表中
 	LIST_INSERT_HEAD(&ieee80211com_head, ic, ic_list);
+	// 节点/站点（接入 SSID）管理支持
 	ieee80211_node_attach(ic);
+	// 协议支持（SSID 的连接认证、关联）
 	ieee80211_proto_attach(ic);
 
+	// 增加一个 vap (virtual access point)，将 wlan 的配置特性（如 SSID、安全模式、运行状态等）
+	//	从具体的射频驱动 rtwn 中分离处理，专门用 vap 实例来表示
+	// 一个物理网卡 ic 可以创建多个 vap，每个 vap 可以像独立的 wifi 一样工作，比如可以
+	//  同时作为 AP 提供热点，以及作为客户端连接别的 AP 网络
 	ieee80211_add_vap(ic);
 
+	// 提供用户接口，方便查询和配置无线参数
 	ieee80211_sysctl_attach(ic);		/* NB: requires ic_vap */
 
 	/*
 	 * Install a default reset method for the ioctl support.
 	 * The driver is expected to fill this in before calling us.
 	 */
+	// 通常是 rtwn 给定的硬件重置操作，一般就是把之前配置的信道清掉
 	if (ic->ic_reset == NULL)
 		ic->ic_reset = ieee80211_default_reset;
 
+	// 初始化链路状态（逻辑连接状态），IEEE80211_S_INIT/IEEE80211_S_SCAN 这些 
 	ieee80211_init_link_state(ic);
 }
 
@@ -323,9 +366,11 @@ ieee80211_mhz2ieee(u_int freq, u_int flags)
 /*
  * Convert channel to IEEE channel number.
  */
+// 802.11 通道到 IEEE 编号的转换
 u_int
 ieee80211_chan2ieee(struct ieee80211com *ic, struct ieee80211_channel *c)
 {
+	// 是 ic_channels 数组中的成员
 	if (ic->ic_channels <= c && c <= &ic->ic_channels[IEEE80211_CHAN_MAX])
 		return c - ic->ic_channels;
 	else if (c == IEEE80211_CHAN_ANYC)
@@ -398,10 +443,12 @@ ieee80211_media_init_with_lock(struct ieee80211com *ic,
 	/*
 	 * Fill in media characteristics.
 	 */
+	// 向网络栈注册 media 连接状态变化 cb 和 状态查询 cb
 	ifmedia_init_with_lock(&ic->ic_media, 0,
 	    media_change, media_stat, lock);
 	maxrate = 0;
 	memset(&allrates, 0, sizeof(allrates));
+	// 遍历 80211 协议栈支持的所有模式
 	for (mode = IEEE80211_MODE_AUTO; mode < IEEE80211_MODE_MAX; mode++) {
 		static const u_int mopts[] = { 
 			IFM_AUTO,
@@ -412,10 +459,13 @@ ieee80211_media_init_with_lock(struct ieee80211com *ic,
 			IFM_IEEE80211_11A | IFM_IEEE80211_TURBO,
 			IFM_IEEE80211_11G | IFM_IEEE80211_TURBO,
 		};
+		// 如果具体的硬件设备不支持，跳过后续的设置
 		if ((ic->ic_modecaps & (1<<mode)) == 0)
 			continue;
+		// 当前处理的模式对应的 media 选项
 		mopt = mopts[mode];
 		ADD(ic, IFM_AUTO, mopt);	/* e.g. 11a auto */
+		// 给 media 添加支持的工作模式
 		if (ic->ic_caps & IEEE80211_C_IBSS)
 			ADD(ic, IFM_AUTO, mopt | IFM_IEEE80211_ADHOC);
 		if (ic->ic_caps & IEEE80211_C_HOSTAP)
@@ -426,6 +476,7 @@ ieee80211_media_init_with_lock(struct ieee80211com *ic,
 			ADD(ic, IFM_AUTO, mopt | IFM_IEEE80211_MONITOR);
 		if (mode == IEEE80211_MODE_AUTO)
 			continue;
+		// 不同无线模式（11a/b/g）下支持的速率（比如 1M/2M/5.5M/11M/6M/9M/…/54M）
 		rs = &ic->ic_sup_rates[mode];
 		for (i = 0; i < rs->rs_nrates; i++) {
 			rate = rs->rs_rates[i];
@@ -474,9 +525,11 @@ ieee80211_media_init_with_lock(struct ieee80211com *ic,
 		if (ic->ic_caps & IEEE80211_C_MONITOR)
 			ADD(ic, mword, IFM_IEEE80211_MONITOR);
 	}
+	// 获取当前接口的媒体状态，把结果存到imr结构体
 	ieee80211_media_status(ifp, &imr);
 	ifmedia_set(&ic->ic_media, imr.ifm_active);
 
+	// maxrate是12Mbps，IF_Mbps(12)就是12*1000000
 	if (maxrate)
 		ifp->if_baudrate = IF_Mbps(maxrate);
 #undef ADD
@@ -490,6 +543,7 @@ ieee80211_media_init(struct ieee80211com *ic,
 	ieee80211_media_init_with_lock(ic, media_change, media_stat, NULL);
 }
 
+// 打印设备支持的物理层模式和速率
 void
 ieee80211_announce(struct ieee80211com *ic)
 {
@@ -498,13 +552,16 @@ ieee80211_announce(struct ieee80211com *ic)
 	struct ieee80211_rateset *rs;
 
 	for (mode = IEEE80211_MODE_11A; mode < IEEE80211_MODE_MAX; mode++) {
+		// 跳过不支持的模式
 		if ((ic->ic_modecaps & (1<<mode)) == 0)
 			continue;
+		// 例如 iwn0: 11g rates:
 		aprint_debug("%s: %s rates: ", ifp->if_xname,
 		    ieee80211_phymode_name[mode]);
 		rs = &ic->ic_sup_rates[mode];
 		for (i = 0; i < rs->rs_nrates; i++) {
 			rate = rs->rs_rates[i];
+			// 将速率转换为媒体类型
 			mword = ieee80211_rate2media(ic, rate, mode);
 			if (mword == 0)
 				continue;

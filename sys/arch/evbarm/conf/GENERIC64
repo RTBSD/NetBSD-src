@@ -289,6 +289,8 @@ re*		at pci? dev ? function ?	# Realtek RTL8111GS
 rge*		at pci? dev ? function ?	# Realtek 8125
 vmx*		at pci? dev ? function ?	# VMware VMXNET3
 wm*		at pci? dev ? function ?	# Intel Gigabit Ethernet
+rtwn*	at pci? dev ? function ?	# Realtek 8188CE/8192CE 802.11b/g/n
+
 
 # MII/PHY support
 atphy*		at mii? phy ?		# Attansic/Atheros PHYs

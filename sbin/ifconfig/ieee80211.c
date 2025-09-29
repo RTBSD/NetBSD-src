@@ -460,6 +460,7 @@ setifpowersavesleep(prop_dictionary_t env, prop_dictionary_t oenv)
 	return 0;
 }
 
+// 执行扫描
 static int
 scan_exec(prop_dictionary_t env, prop_dictionary_t oenv)
 {
@@ -470,10 +471,13 @@ scan_exec(prop_dictionary_t env, prop_dictionary_t oenv)
 		return -1;
 	}
 
+	// 向内核获取网络接口的 flags，判断当前网络接口是否 UP
 	if ((ifr.ifr_flags & IFF_UP) == 0)
 		errx(EXIT_FAILURE, "The interface must be up before scanning.");
 
+	// 向内核申请开始扫描，等待扫描完成
 	scan_and_wait(env);
+	// 打印扫描到的热点信息
 	list_scan(env);
 
 	return 0;
@@ -739,17 +743,21 @@ scan_and_wait(prop_dictionary_t env)
 {
 	int sroute;
 
+	// 使用 PF_ROUTE 套接字监听内核事件
 	sroute = prog_socket(PF_ROUTE, SOCK_RAW, 0);
 	if (sroute < 0) {
 		warn("socket(PF_ROUTE,SOCK_RAW)");
 		return;
 	}
 	/* NB: only root can trigger a scan so ignore errors */
+	// 下发扫描请求
 	if (set80211(env, IEEE80211_IOC_SCAN_REQ, 0, 0, NULL) >= 0) {
+		// 扫描请求成功下发
 		char buf[2048];
 		struct if_announcemsghdr *ifan;
 		struct rt_msghdr *rtm;
 
+		// 监听等待扫描完成
 		do {
 			if (prog_read(sroute, buf, sizeof(buf)) < 0) {
 				warn("read(PF_ROUTE)");
@@ -759,6 +767,7 @@ scan_and_wait(prop_dictionary_t env)
 			if (rtm->rtm_version != RTM_VERSION)
 				break;
 			ifan = (struct if_announcemsghdr *) rtm;
+		// 等到扫描完成的 flag RTM_IEEE80211_SCAN 后退出
 		} while (rtm->rtm_type != RTM_IEEE80211 ||
 		    ifan->ifan_what != RTM_IEEE80211_SCAN);
 	}
@@ -800,12 +809,14 @@ list_scan(prop_dictionary_t env)
 	ireq.i_type = IEEE80211_IOC_SCAN_RESULTS;
 	ireq.i_data = buf;
 	ireq.i_len = sizeof(buf);
+	// 向内核请求，获取无线网络信息，信息的类型是之前扫描的结果
 	if (direct_ioctl(env, SIOCG80211, &ireq) < 0)
 		errx(EXIT_FAILURE, "unable to get scan results");
 	len = ireq.i_len;
 	if (len < (int)sizeof(*sr))
 		return;
 
+	// 计算扫描到多少个 SSID，打印信息
 	ssidmax = calc_len(buf, len);
 
 	printf("%-*.*s  %-17.17s  %4s %4s  %-7s %3s %4s\n"

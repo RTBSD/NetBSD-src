@@ -162,6 +162,7 @@ dev_key_set(struct ieee80211com *ic, const struct ieee80211_key *key,
 /*
  * Setup crypto support.
  */
+// 为一块无线网卡准备好所有与加密/解密相关的功能
 void
 ieee80211_crypto_attach(struct ieee80211com *ic)
 {
@@ -169,9 +170,12 @@ ieee80211_crypto_attach(struct ieee80211com *ic)
 	int i;
 
 	/* NB: we assume everything is pre-zero'd */
+	// 默认无加密算法，没有使用任何加密密钥
 	cs->cs_def_txkey = IEEE80211_KEYIX_NONE;
 	cs->cs_max_keyix = IEEE80211_WEP_NKID;
+	// 加密方式 none 的实现
 	ciphers[IEEE80211_CIPHER_NONE] = &ieee80211_cipher_none;
+	// 初始化密钥存储区，将这个密钥槽的索引也标记为无效
 	for (i = 0; i < IEEE80211_WEP_NKID; i++)
 		ieee80211_crypto_resetkey(ic, &cs->cs_nw_keys[i],
 			IEEE80211_KEYIX_NONE);
@@ -179,9 +183,14 @@ ieee80211_crypto_attach(struct ieee80211com *ic)
 	 * Initialize the driver key support routines to noop entries.
 	 * This is useful especially for the cipher test modules.
 	 */
+	// 所有密钥处理回调都使用空操作
+	//	1. 为一个新的连接分配一个硬件密钥槽
 	cs->cs_key_alloc = null_key_alloc;
+	//  2. 将一个软件计算出的密钥写入到硬件的密钥存储区
 	cs->cs_key_set = null_key_set;
+	//  3. 删除一个硬件中的密钥
 	cs->cs_key_delete = null_key_delete;
+	//  4. 安全地进行密钥更新（如组播密钥更新）
 	cs->cs_key_update_begin = null_key_update;
 	cs->cs_key_update_end = null_key_update;
 }

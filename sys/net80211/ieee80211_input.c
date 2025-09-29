@@ -186,6 +186,7 @@ ieee80211_input_data(struct ieee80211com *ic, struct mbuf **mp,
 			ic->ic_stats.is_rx_wrongdir++;
 			goto out;
 		}
+		// 特殊情况，单工
 		if ((ifp->if_flags & IFF_SIMPLEX) &&
 		    IEEE80211_IS_MULTICAST(wh->i_addr1) &&
 		    IEEE80211_ADDR_EQ(wh->i_addr3, ic->ic_myaddr)) {
@@ -361,6 +362,7 @@ ieee80211_input_data(struct ieee80211com *ic, struct mbuf **mp,
 		}
 	}
 
+	// 增加接收包计数
 	if_statinc(ifp, if_ipackets);
 	IEEE80211_NODE_STAT(ni, rx_data);
 	IEEE80211_NODE_STAT_ADD(ni, rx_bytes, m->m_pkthdr.len);
@@ -371,6 +373,7 @@ ieee80211_input_data(struct ieee80211com *ic, struct mbuf **mp,
 	return 0;
 
 err:
+	// 增加错误计数
 	if_statinc(ifp, if_ierrors);
 out:
 	*mp = m;
@@ -460,6 +463,7 @@ ieee80211_input_management(struct ieee80211com *ic, struct mbuf **mp,
 	return 0;
 
 err:
+	// 错误计数
 	if_statinc(ifp, if_ierrors);
 out:
 	*mp = m;
@@ -505,6 +509,7 @@ ieee80211_input_control(struct ieee80211com *ic, struct mbuf *m,
  * mean ``better signal''.  The receive timestamp is currently not used
  * by the 802.11 layer.
  */
+// 处理从无线接口收到的 802.11 帧（数据帧，管理帧，控制帧）
 int
 ieee80211_input(struct ieee80211com *ic, struct mbuf *m,
 	struct ieee80211_node *ni, int rssi, u_int32_t rstamp)
@@ -905,12 +910,14 @@ ieee80211_deliver_data(struct ieee80211com *ic,
 			}
 #endif
 			len = m1->m_pkthdr.len;
+			// 通过 mbuf 发送数据
 			IFQ_ENQUEUE(&ifp->if_snd, m1, error);
 			if (error) {
 				if_statinc(ifp, if_oerrors);
 				m_freem(m);
 				m = NULL;
 			}
+			// 增加发送字节数统计
 			if_statadd(ifp, if_obytes, len);
 		}
 	}

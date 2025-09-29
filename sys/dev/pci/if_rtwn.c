@@ -101,6 +101,8 @@ static void	rtwn_attach(device_t, device_t, void *);
 static int	rtwn_detach(device_t, int);
 static int	rtwn_activate(device_t, enum devact);
 
+// Realtek RTL8188CE/RTL8192CE PCIe IEEE 802.11b/g/n wireless net-
+//     work device 驱动
 CFATTACH_DECL_NEW(rtwn, sizeof(struct rtwn_softc), rtwn_match,
     rtwn_attach, rtwn_detach, rtwn_activate);
 
@@ -190,6 +192,7 @@ rtwn_lookup(const struct pci_attach_args *pa)
 	const struct rtwn_device *rd;
 	int i;
 
+	// 与已知设备匹配
 	for (i = 0; i < __arraycount(rtwn_devices); i++) {
 		rd = &rtwn_devices[i];
 		if (PCI_VENDOR(pa->pa_id) == rd->rd_vendor &&
@@ -228,11 +231,13 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 
 	pci_aprint_devinfo(pa, NULL);
 
+	// 初始化扫描任务和校正任务
 	callout_init(&sc->scan_to, 0);
 	callout_setfunc(&sc->scan_to, rtwn_next_scan, sc);
 	callout_init(&sc->calib_to, 0);
 	callout_setfunc(&sc->calib_to, rtwn_calib_to, sc);
 
+	// 注册软件中断任务，softintr 和 rtwn 初始化，优先级为 SOFTINT_NET
 	sc->sc_soft_ih = softint_establish(SOFTINT_NET, rtwn_softintr, sc);
 	sc->init_task = softint_establish(SOFTINT_NET, rtwn_init_task, sc);
 
@@ -266,6 +271,7 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 	}
 	aprint_normal_dev(self, "interrupting at %s\n", intrstr);
 
+	// 读芯片 id
 	error = rtwn_read_chipid(sc);
 	if (error != 0) {
 		aprint_error_dev(self, "unsupported test or unknown chip\n");
@@ -314,6 +320,7 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 	/*
 	 * Setup the 802.11 device.
 	 */
+	// 绑定网络接口
 	ic->ic_ifp = ifp;
 	ic->ic_phytype = IEEE80211_T_OFDM;	/* Not only, but not used. */
 	ic->ic_opmode = IEEE80211_M_STA;	/* Default to BSS mode. */
@@ -354,17 +361,25 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 
 	ifp->if_softc = sc;
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
+	// 初始化和启动网卡
 	ifp->if_init = rtwn_init;
+	// 处理用户态下发的和接口相关的配置
 	ifp->if_ioctl = rtwn_ioctl;
+	// 排队发送网络接口的数据
 	ifp->if_start = rtwn_start;
+	// 网卡自带定时器处理
 	ifp->if_watchdog = rtwn_watchdog;
+	// 设置标志，驱动可用
 	IFQ_SET_READY(&ifp->if_snd);
 	memcpy(ifp->if_xname, device_xname(sc->sc_dev), IFNAMSIZ);
 
+	// 初始化网络接口
 	if_initialize(ifp);
+	// 初始化 802.11 网络接口
 	ieee80211_ifattach(ic);
 	/* Use common softint-based if_input */
 	ifp->if_percpuq = if_percpuq_create(ifp);
+	// 注册网络接口
 	if_register(ifp);
 
 	/* override default methods */
@@ -374,7 +389,9 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 
 	/* Override state transition machine. */
 	sc->sc_newstate = ic->ic_newstate;
+	// 网络设备状态机变化
 	ic->ic_newstate = rtwn_newstate;
+	// 初始化 802.11 PHY
 	ieee80211_media_init(ic, rtwn_media_change, ieee80211_media_status);
 
 	bpf_attach2(ifp, DLT_IEEE802_11_RADIO,
@@ -480,6 +497,7 @@ rtwn_alloc_rx_list(struct rtwn_softc *sc)
 	int i, error = 0;
 
 	/* Allocate Rx descriptors. */
+	// 分配 dmamap 给 r92c_rx_desc_pci 用，1 个 segment
 	error = bus_dmamap_create(sc->sc_dmat, size, 1, size, 0, BUS_DMA_NOWAIT,
 		&rx_ring->map);
 	if (error != 0) {
@@ -496,6 +514,7 @@ rtwn_alloc_rx_list(struct rtwn_softc *sc)
 		goto fail;
 	}
 
+	// 映射 DMA 空间作为描述符 rx_ring->desc
 	error = bus_dmamem_map(sc->sc_dmat, &rx_ring->seg, rx_ring->nsegs,
 	    size, (void **)&rx_ring->desc, BUS_DMA_NOWAIT | BUS_DMA_COHERENT);
 	if (error != 0) {
@@ -517,6 +536,7 @@ rtwn_alloc_rx_list(struct rtwn_softc *sc)
 	for (i = 0; i < RTWN_RX_LIST_COUNT; i++) {
 		rx_data = &rx_ring->rx_data[i];
 
+		// 每个描述符分配一个 mbuf
 		error = bus_dmamap_create(sc->sc_dmat, MCLBYTES, 1, MCLBYTES,
 		    0, BUS_DMA_NOWAIT, &rx_data->map);
 		if (error != 0) {
@@ -525,6 +545,7 @@ rtwn_alloc_rx_list(struct rtwn_softc *sc)
 			goto fail;
 		}
 
+		// 分配一个 mbuf
 		MGETHDR(rx_data->m, M_DONTWAIT, MT_DATA);
 		if (__predict_false(rx_data->m == NULL)) {
 			aprint_error_dev(sc->sc_dev,
@@ -532,6 +553,7 @@ rtwn_alloc_rx_list(struct rtwn_softc *sc)
 			error = ENOMEM;
 			goto fail;
 		}
+		// 增加 mbuf cluster
 		MCLGET(rx_data->m, M_DONTWAIT);
 		if (__predict_false(!(rx_data->m->m_flags & M_EXT))) {
 			aprint_error_dev(sc->sc_dev,
@@ -542,6 +564,7 @@ rtwn_alloc_rx_list(struct rtwn_softc *sc)
 			goto fail;
 		}
 
+		// 让 mbuf 指向分配的 DMA 缓冲区
 		error = bus_dmamap_load(sc->sc_dmat, rx_data->map,
 		    mtod(rx_data->m, void *), MCLBYTES, NULL,
 		    BUS_DMA_NOWAIT | BUS_DMA_READ);
@@ -554,8 +577,19 @@ rtwn_alloc_rx_list(struct rtwn_softc *sc)
 		bus_dmamap_sync(sc->sc_dmat, rx_data->map, 0, MCLBYTES,
 		    BUS_DMASYNC_PREREAD);
 
+		// 设置好描述符列表，ds_addr 指向 mbuf 指向缓冲区的物理地址
 		rtwn_setup_rx_desc(sc, &rx_ring->desc[i],
 		    rx_data->map->dm_segs[0].ds_addr, MCLBYTES, i);
+#ifdef RTWN_DEBUG
+		if ((rtwn_debug >= 2) && 
+			((i == 0) || (i == RTWN_RX_LIST_COUNT - 1))) {
+			printf("[%d] desc:%p dmabuf:0x%x len:%d rxdw0:0x%x",
+				&rx_ring->desc[i],
+				rx_ring->desc[i].rxbufaddr,
+			    MCLBYTES,
+				rx_ring->desc[i].rxdw0);
+		}
+#endif
 	}
 fail:	if (error != 0)
 		rtwn_free_rx_list(sc);
@@ -669,6 +703,7 @@ rtwn_alloc_tx_list(struct rtwn_softc *sc, int qid)
 			    "could not create tx buf DMA map\n");
 			goto fail;
 		}
+		// 发送用的 mbuf 由网络协议栈释放
 		tx_data->m = NULL;
 		tx_data->ni = NULL;
 	}
@@ -1088,6 +1123,7 @@ rtwn_media_change(struct ifnet *ifp)
 
 	if ((ifp->if_flags & (IFF_UP | IFF_RUNNING)) ==
 	    (IFF_UP | IFF_RUNNING)) {
+		// 链路发生变化，重新初始化
 		rtwn_stop(ifp, 0);
 		error = rtwn_init(ifp);
 	}
@@ -1350,6 +1386,7 @@ rtwn_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg)
 	callout_stop(&sc->scan_to);
 	callout_stop(&sc->calib_to);
 
+	// 状态机发生变化
 	if (ostate != nstate) {
 		DPRINTF(("%s: %s -> %s\n", __func__,
 		    ieee80211_state_name[ostate],
@@ -1361,6 +1398,7 @@ rtwn_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg)
 		break;
 
 	case IEEE80211_S_SCAN:
+		// 离开 scan 状态
 		if (nstate != IEEE80211_S_SCAN) {
 			/*
 			 * End of scanning
@@ -1380,6 +1418,7 @@ rtwn_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg)
 		break;
 
 	case IEEE80211_S_RUN:
+		// 离开运行状态，关灯
 		/* Turn link LED off. */
 		rtwn_set_led(sc, RTWN_LED_LINK, 0);
 
@@ -1599,6 +1638,7 @@ rtwn_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg)
 		break;
 	}
 
+	// 执行 802.11 栈默认的状态机变化
 	(void)sc->sc_newstate(ic, nstate, arg);
 
 	splx(s);
@@ -1765,6 +1805,7 @@ rtwn_rx_frame(struct rtwn_softc *sc, struct r92c_rx_desc_pci *rx_desc,
 	DPRINTFN(5, ("Rx frame len=%d rate=%d infosz=%d shift=%d rssi=%d\n",
 	    pktlen, rate, infosz, shift, rssi));
 
+	// 分配一个 mbuf，用来存放接收到的数据
 	MGETHDR(m1, M_DONTWAIT, MT_DATA);
 	if (__predict_false(m1 == NULL)) {
 		ic->ic_stats.is_rx_nobuf++;
@@ -1783,6 +1824,7 @@ rtwn_rx_frame(struct rtwn_softc *sc, struct r92c_rx_desc_pci *rx_desc,
 	    BUS_DMASYNC_POSTREAD);
 
 	bus_dmamap_unload(sc->sc_dmat, rx_data->map);
+	// 接收到的数据拷贝到 mbuf 对应的缓冲区
 	error = bus_dmamap_load(sc->sc_dmat, rx_data->map, mtod(m1, void *),
 	    MCLBYTES, NULL, BUS_DMA_NOWAIT | BUS_DMA_READ);
 	if (error != 0) {
@@ -1808,12 +1850,14 @@ rtwn_rx_frame(struct rtwn_softc *sc, struct r92c_rx_desc_pci *rx_desc,
 	m = rx_data->m;
 	rx_data->m = m1;
 	m->m_pkthdr.len = m->m_len = totlen;
+	// 绑定 mbuf 接收的 netif ifp
 	m_set_rcvif(m, ifp);
 
 	bus_dmamap_sync(sc->sc_dmat, rx_data->map, 0, MCLBYTES,
 	    BUS_DMASYNC_PREREAD);
 
 	/* Update RX descriptor. */
+	// 驱动用完了接收描述符，又还给硬件
 	rtwn_setup_rx_desc(sc, rx_desc, rx_data->map->dm_segs[0].ds_addr,
 	    MCLBYTES, desc_idx);
 
@@ -1822,6 +1866,7 @@ rtwn_rx_frame(struct rtwn_softc *sc, struct r92c_rx_desc_pci *rx_desc,
 		m_adj(m, infosz + shift);
 	else
 		m_adj(m, shift);
+	// 将 mbuf 指针转换为 80211 帧
 	wh = mtod(m, struct ieee80211_frame *);
 
 	s = splnet();
@@ -1863,6 +1908,7 @@ rtwn_rx_frame(struct rtwn_softc *sc, struct r92c_rx_desc_pci *rx_desc,
 	ni = ieee80211_find_rxnode(ic, (struct ieee80211_frame_min *)wh);
 
 	/* push the frame up to the 802.11 stack */
+	// 由 80211 协议栈处理接收到的数据帧
 	ieee80211_input(ic, m, ni, rssi, 0);
 
 	/* Node is no longer needed. */
@@ -1886,6 +1932,7 @@ rtwn_tx(struct rtwn_softc *sc, struct mbuf *m, struct ieee80211_node *ni)
 
 	DPRINTFN(3, ("%s: %s\n", device_xname(sc->sc_dev), __func__));
 
+	// 网络协议栈释放的 mbuf, 保存的是待发送的数据
 	wh = mtod(m, struct ieee80211_frame *);
 	type = wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
 
@@ -1998,6 +2045,7 @@ rtwn_tx(struct rtwn_softc *sc, struct mbuf *m, struct ieee80211_node *ni)
 	} else
 		txd->txdw4 |= htole32(R92C_TXDW4_QOS);
 
+	// 从 mbuf 中加载需要发送的数据
 	error = bus_dmamap_load_mbuf(sc->sc_dmat, data->map, m,
 	    BUS_DMA_NOWAIT | BUS_DMA_WRITE);
 	if (error && error != EFBIG) {
@@ -2007,6 +2055,12 @@ rtwn_tx(struct rtwn_softc *sc, struct mbuf *m, struct ieee80211_node *ni)
 		return error;
 	}
 	if (error != 0) {
+#ifdef RTWN_DEBUG
+	if (rtwn_debug >= 2) {
+		printf("tx too many segments and linearize mbuf\n");
+	}
+#endif
+
 		/* Too many DMA segments, linearize mbuf. */
 		struct mbuf *newm = m_defrag(m, M_DONTWAIT);
 		if (newm == NULL) {
@@ -2028,6 +2082,11 @@ rtwn_tx(struct rtwn_softc *sc, struct mbuf *m, struct ieee80211_node *ni)
 
 	txd->txbufaddr = htole32(data->map->dm_segs[0].ds_addr);
 	txd->txbufsize = htole16(m->m_pkthdr.len);
+#ifdef RTWN_DEBUG
+	if (rtwn_debug >= 2) {
+		printf("tx buf:0x%x, size:%d\n", txd->txbufaddr, txd->txbufsize);
+	}
+#endif
 	bus_space_barrier(sc->sc_st, sc->sc_sh, 0, sc->sc_mapsize,
 	    BUS_SPACE_BARRIER_WRITE);
 	txd->txdw0 |= htole32(R92C_TXDW0_OWN);
@@ -2129,6 +2188,7 @@ rtwn_start(struct ifnet *ifp)
 			break;
 		}
 		/* Send pending management frames first. */
+		// 获取一个 mbuf 用来发送，？需要把 pbuf 数据转换成 mbuf
 		IF_DEQUEUE(&ic->ic_mgtq, m);
 		if (m != NULL) {
 			ni = M_GETCTX(m, struct ieee80211_node *);
@@ -2148,6 +2208,7 @@ rtwn_start(struct ifnet *ifp)
 			if_statinc(ifp, if_oerrors);
 			continue;
 		}
+		// 创建一个 mbuf，指针类型为以太网 header
 		eh = mtod(m, struct ether_header *);
 		ni = ieee80211_find_txnode(ic, eh->ether_dhost);
 		if (ni == NULL) {
@@ -2166,6 +2227,7 @@ rtwn_start(struct ifnet *ifp)
 sendit:
 		bpf_mtap3(ic->ic_rawbpf, m, BPF_D_OUT);
 
+		// 发送数据帧
 		if (rtwn_tx(sc, m, ni) != 0) {
 			ieee80211_free_node(ni);
 			if_statinc(ifp, if_oerrors);
@@ -2190,8 +2252,10 @@ rtwn_watchdog(struct ifnet *ifp)
 	ifp->if_timer = 0;
 
 	if (sc->sc_tx_timer > 0) {
+		 // 网络接口启动一段时间后开始 init_task
 		if (--sc->sc_tx_timer == 0) {
 			aprint_error_dev(sc->sc_dev, "device timeout\n");
+			// 启动 init_task
 			softint_schedule(sc->init_task);
 			if_statinc(ifp, if_oerrors);
 			return;
@@ -3560,10 +3624,12 @@ rtwn_intr(void *xsc)
 	/* Disable interrupts. */
 	rtwn_write_4(sc, R92C_HIMR, 0x00000000);
 
+	// 运行中断下半部
 	softint_schedule(sc->sc_soft_ih);
 	return 1;
 }
 
+// 网卡中断下半部处理
 static void
 rtwn_softintr(void *xsc)
 {
@@ -3574,6 +3640,7 @@ rtwn_softintr(void *xsc)
 	if (!ISSET(sc->sc_flags, RTWN_FLAG_FW_LOADED))
 		return;
 
+	// 获取中断状态，ACK 中断
 	status = rtwn_read_4(sc, R92C_HISR);
 	if (status == 0 || status == 0xffffffff)
 		goto out;
@@ -3590,10 +3657,12 @@ rtwn_softintr(void *xsc)
 			if (le32toh(rx_desc->rxdw0) & R92C_RXDW0_OWN)
 				continue;
 
+			// 遍历描述符，处理接收到的数据
 			rtwn_rx_frame(sc, rx_desc, rx_data, i);
 		}
 	}
 
+	// 发送完成事件处理
 	if (status & R92C_IMR_BDOK)
 		rtwn_tx_done(sc, RTWN_BEACON_QUEUE);
 	if (status & R92C_IMR_HIGHDOK)

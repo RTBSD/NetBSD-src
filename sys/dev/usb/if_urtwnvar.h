@@ -37,6 +37,9 @@
 #define URTWN_LED_LINK	0
 #define URTWN_LED_DATA	1
 
+// radiotap 是 捕获无线数据包时添加在原始 802.11 帧前方的附加头部，
+//	提供了信号强度、噪声强度、信道、时间戳等关键元数据，为驱动程序和
+//	用户态应用程序提供详细的无线传输信息，支持网络诊断、性能优化和安全分析等应用
 struct urtwn_rx_radiotap_header {
 	struct ieee80211_radiotap_header wr_ihdr;
 	uint8_t		wr_flags;
@@ -52,6 +55,7 @@ struct urtwn_rx_radiotap_header {
 	 1 << IEEE80211_RADIOTAP_CHANNEL |		\
 	 1 << IEEE80211_RADIOTAP_DBM_ANTSIGNAL)
 
+// 发送用的 radiotap 帧头
 struct urtwn_tx_radiotap_header {
 	struct ieee80211_radiotap_header wt_ihdr;
 	uint8_t		wt_flags;
@@ -110,13 +114,17 @@ struct urtwn_host_cmd_ring {
 
 struct urtwn_softc {
 	device_t			sc_dev;
+	// 对应一个 80211 硬件
 	struct ieee80211com		sc_ic;
+	// 对应一个通用网络接口
 	struct ethercom			sc_ec;
 #define sc_if   sc_ec.ec_if
 	int				(*sc_newstate)(struct ieee80211com *,
 					    enum ieee80211_state, int);
 
+	// 对应一个 USB 设备
 	struct usbd_device *		sc_udev;
+	// 对应 USB 设备的一种 USB 功能逻辑接口
 	struct usbd_interface *		sc_iface;
 	u_int				sc_flags;
 #define URTWN_FLAG_CCK_HIPWR	__BIT(0)
@@ -124,6 +132,7 @@ struct urtwn_softc {
 #define	URTWN_FLAG_FWREADY	__BIT(2)
 	int				sc_dying;
 
+	// 用于执行异步任务
 	struct usb_task			sc_task;
 	callout_t			sc_scan_to;
 	callout_t			sc_calib_to;
@@ -136,6 +145,7 @@ struct urtwn_softc {
 	kmutex_t			sc_write_mtx;
 	kmutex_t			sc_media_mtx;	/* XXX */
 
+	// 对应 IN/OUT USB 端点
 	struct usbd_pipe *		rx_pipe[R92C_MAX_EPIN];
 	int				rx_npipe;
 	struct usbd_pipe *		tx_pipe[R92C_MAX_EPOUT];
