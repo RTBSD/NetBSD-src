@@ -310,6 +310,7 @@ ieee80211_reset_scan(struct ieee80211com *ic)
 void
 ieee80211_begin_scan(struct ieee80211com *ic, int reset)
 {
+	// 开始新一次扫描
 	ic->ic_scan.nt_scangen++;
 
 	/*

@@ -623,6 +623,7 @@ ieee80211_input(struct ieee80211com *ic, struct mbuf *m,
 			/*
 			 * Data frame, validate the bssid.
 			 */
+			// 接收到的数据帧，BSSID 是否和网卡的 node 一致，或者是广播数据
 			if (!IEEE80211_ADDR_EQ(bssid, ic->ic_bss->ni_bssid) &&
 			    !IEEE80211_ADDR_EQ(bssid, ifp->if_broadcastaddr)) {
 				/* not interested in */

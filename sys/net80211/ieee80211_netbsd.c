@@ -639,6 +639,7 @@ ieee80211_notify_node_leave(struct ieee80211com *ic, struct ieee80211_node *ni)
 
 	if (ni == ic->ic_bss) {
 		rt_ieee80211msg(ifp, RTM_IEEE80211_DISASSOC, NULL, 0);
+		// 链路 down 状态
 		if_link_state_change(ifp, LINK_STATE_DOWN);
 	} else {
 		/* fire off wireless event station leaving */

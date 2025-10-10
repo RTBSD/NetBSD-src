@@ -63,7 +63,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_rtwn.c,v 1.20 2021/06/16 00:21:18 riastradh Exp $
 #include <dev/ic/rtwn_data.h>
 #include <dev/pci/if_rtwnreg.h>
 
-/* #define RTWN_DEBUG */
+#define RTWN_DEBUG
 
 #ifdef RTWN_DEBUG
 #define DPRINTF(x)	do { if (rtwn_debug) printf x; } while (0)
@@ -392,6 +392,7 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 	// 网络设备状态机变化
 	ic->ic_newstate = rtwn_newstate;
 	// 初始化 802.11 PHY
+	//  lwip: rtwn_media_change 注册到链路中断回调里
 	ieee80211_media_init(ic, rtwn_media_change, ieee80211_media_status);
 
 	bpf_attach2(ifp, DLT_IEEE802_11_RADIO,
@@ -429,6 +430,7 @@ rtwn_detach(device_t self, int flags)
 		rtwn_stop(ifp, 0);
 
 		pmf_device_deregister(self);
+		// 停止网卡
 		ifp->if_flags &= ~(IFF_RUNNING | IFF_OACTIVE);
 		bpf_detach(ifp);
 		ieee80211_ifdetach(ic);
@@ -584,6 +586,7 @@ rtwn_alloc_rx_list(struct rtwn_softc *sc)
 		if ((rtwn_debug >= 2) && 
 			((i == 0) || (i == RTWN_RX_LIST_COUNT - 1))) {
 			printf("[%d] desc:%p dmabuf:0x%x len:%d rxdw0:0x%x",
+				i,
 				&rx_ring->desc[i],
 				rx_ring->desc[i].rxbufaddr,
 			    MCLBYTES,
@@ -2157,6 +2160,7 @@ rtwn_tx_done(struct rtwn_softc *sc, int qid)
 		ieee80211_free_node(tx_data->ni);
 		tx_data->ni = NULL;
 
+		// 累积接收到的数据包数目
 		if_statinc(ifp, if_opackets);
 		sc->sc_tx_timer = 0;
 		tx_ring->queued--;
@@ -2219,6 +2223,7 @@ rtwn_start(struct ifnet *ifp)
 
 		bpf_mtap(ifp, m, BPF_D_OUT);
 
+		// 封装成 80211 帧
 		if ((m = ieee80211_encap(ic, m, ni)) == NULL) {
 			ieee80211_free_node(ni);
 			if_statinc(ifp, if_oerrors);
@@ -2285,6 +2290,7 @@ rtwn_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 		case IFF_UP | IFF_RUNNING:
 			break;
 		case IFF_UP:
+			// 用户态通过 ifconfig 等命令将网卡设置为 UP
 			error = rtwn_init(ifp);
 			if (error != 0)
 				ifp->if_flags &= ~IFF_UP;
@@ -2311,6 +2317,7 @@ rtwn_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 		    ic->ic_opmode == IEEE80211_M_MONITOR) {
 			if ((ifp->if_flags & (IFF_UP | IFF_RUNNING)) ==
 			    (IFF_UP | IFF_RUNNING)) {
+				// 设置信道失败，将当前信道设为空
 				rtwn_set_chan(sc, ic->ic_curchan, NULL);
 			}
 			error = 0;

@@ -1007,6 +1007,7 @@ ieee80211_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg
 				 */
 				ieee80211_create_ibss(ic, ic->ic_des_chan);
 			} else {
+				// 开始扫描 SSID
 				ieee80211_begin_scan(ic, arg);
 			}
 			break;

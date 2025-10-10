@@ -809,11 +809,13 @@ ieee80211_media_status(struct ifnet *ifp, struct ifmediareq *imr)
 	}
 	imr->ifm_status = IFM_AVALID;
 	imr->ifm_active = IFM_IEEE80211;
+	// 网卡处于运行中，PHY 的状态也是 ACTIVE
 	if (ic->ic_state == IEEE80211_S_RUN)
 		imr->ifm_status |= IFM_ACTIVE;
 	/*
 	 * Calculate a current rate if possible.
 	 */
+	// lwip 可能不需要获取 speed，将相关信息打印出来就可以
 	if (ic->ic_fixed_rate != IEEE80211_FIXED_RATE_NONE) {
 		/*
 		 * A fixed rate is set, report that.
