@@ -220,6 +220,7 @@ ieee80211_mgmt_output(struct ieee80211com *ic, struct ieee80211_node *ni,
 		/*
 		 * Set the mgt frame timeout.
 		 */
+		// 下一次进入 ieee80211_watchdog 时需要进行处理
 		ic->ic_mgt_timer = timer;
 		ifp->if_timer = 1;
 	}
@@ -1387,6 +1388,7 @@ ieee80211_send_probereq(struct ieee80211_node *ni,
 	M_SETCTX(m, ni);
 
 	wh = mtod(m, struct ieee80211_frame *);
+	// 0b0 = management frame, 0b0100 = Probe request
 	ieee80211_send_setup(ic, ni, wh,
 	    IEEE80211_FC0_TYPE_MGT | IEEE80211_FC0_SUBTYPE_PROBE_REQ,
 	    sa, da, bssid);
@@ -1400,6 +1402,7 @@ ieee80211_send_probereq(struct ieee80211_node *ni,
 	    ether_sprintf(wh->i_addr1),
 	    ieee80211_chan2ieee(ic, ic->ic_curchan));
 
+	// 管理帧入队，准备发送
 	IF_ENQUEUE(&ic->ic_mgtq, m);
 	if_start_lock(ic->ic_ifp);
 	return 0;

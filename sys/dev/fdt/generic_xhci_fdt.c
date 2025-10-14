@@ -88,6 +88,7 @@ generic_xhci_fdt_attach(device_t parent, device_t self, void *aux)
 	char intrstr[128];
 	bus_addr_t addr;
 	bus_size_t size;
+	uint32_t hccparams;
 	int error;
 	void *ih;
 #if 0
@@ -123,13 +124,21 @@ generic_xhci_fdt_attach(device_t parent, device_t self, void *aux)
 
 	sc->sc_dev = self;
 	sc->sc_bus.ub_hcpriv = sc;
-	sc->sc_bus.ub_dmatag = faa->faa_dmat;
+	sc->sc_bus.ub_revision = USBREV_3_0;
 	sc->sc_ios = size;
 	sc->sc_iot = faa->faa_bst;
 	if (bus_space_map(sc->sc_iot, addr, size, 0, &sc->sc_ioh) != 0) {
 		aprint_error(": couldn't map registers\n");
 		return;
 	}
+
+	hccparams = bus_space_read_4(sc->sc_iot, sc->sc_ioh, XHCI_HCCPARAMS);
+	if (XHCI_HCC_AC64(hccparams)) {
+		aprint_verbose_dev(self, "64-bit DMA");
+	} else {
+		aprint_verbose_dev(self, "32-bit DMA\n");
+	}
+	sc->sc_bus.ub_dmatag = faa->faa_dmat;
 
 	if (!fdtbus_intr_str(phandle, 0, intrstr, sizeof(intrstr))) {
 		aprint_error_dev(self, "failed to decode interrupt\n");
@@ -145,12 +154,13 @@ generic_xhci_fdt_attach(device_t parent, device_t self, void *aux)
 	}
 	aprint_normal_dev(self, "interrupting on %s\n", intrstr);
 
-	sc->sc_bus.ub_revision = USBREV_3_0;
 	error = xhci_init(sc);
 	if (error) {
 		aprint_error_dev(self, "init failed, error = %d\n", error);
 		return;
 	}
+
+	pmf_device_register1(self, NULL, NULL, xhci_shutdown);
 
 	sc->sc_child = config_found(self, &sc->sc_bus, usbctlprint, CFARGS_NONE);
 	sc->sc_child2 = config_found(self, &sc->sc_bus2, usbctlprint,

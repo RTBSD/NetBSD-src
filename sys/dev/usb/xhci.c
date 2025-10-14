@@ -1279,6 +1279,7 @@ xhci_ecp(struct xhci_softc *sc)
 			break;
 		}
 		case XHCI_ID_USB_LEGACY: {
+#if 0 /* pci xhci only */
 			uint8_t bios_sem;
 
 			/* Take host controller ownership from BIOS */
@@ -1300,6 +1301,7 @@ xhci_ecp(struct xhci_softc *sc)
 					    "timed out waiting for BIOS\n");
 				}
 			}
+#endif
 			break;
 		}
 		default:
@@ -1391,6 +1393,8 @@ xhci_init(struct xhci_softc *sc)
 
 	XHCIHIST_FUNC(); XHCIHIST_CALLED();
 
+	aprint_normal_dev(sc->sc_dev, "%s\n", __func__);
+
 	/* Set up the bus struct for the usb 3 and usb 2 buses */
 	sc->sc_bus.ub_methods = &xhci_bus_methods;
 	sc->sc_bus.ub_pipesize = sizeof(struct xhci_pipe);
@@ -1404,8 +1408,10 @@ xhci_init(struct xhci_softc *sc)
 	sc->sc_bus2.ub_hcpriv = sc;
 	sc->sc_bus2.ub_dmatag = sc->sc_bus.ub_dmatag;
 
-	caplength = xhci_read_1(sc, XHCI_CAPLENGTH);
-	hciversion = xhci_read_2(sc, XHCI_HCIVERSION);
+	/*caplength = xhci_read_1(sc, XHCI_CAPLENGTH);*/
+	caplength = (uint8_t)(xhci_read_4(sc, XHCI_CAPLENGTH)) & 0xFF;
+	/*hciversion = xhci_read_2(sc, XHCI_HCIVERSION);*/
+	hciversion = (uint16_t)(xhci_read_4(sc, XHCI_CAPLENGTH) >> 16) & 0xFFFF;
 
 	if (hciversion < XHCI_HCIVERSION_0_96 ||
 	    hciversion >= 0x0200) {

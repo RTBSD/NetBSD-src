@@ -411,7 +411,7 @@ ieee80211_probe_curchan(struct ieee80211com *ic, int force)
 		 * XXX send both broadcast+directed probe request
 		 */
 		// 发送探测帧，如果之前设置了 ssid，就是发送定向探测帧，只有目标
-		//	ssud 收到探测帧后会回复
+		//	ssid 收到探测帧后会回复 （如果通过 ioctl 预先设置了目标 ssid）
 		ieee80211_send_probereq(ic->ic_bss,
 			ic->ic_myaddr, ifp->if_broadcastaddr,
 			ifp->if_broadcastaddr,

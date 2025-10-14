@@ -2093,6 +2093,7 @@ ieee80211_recv_mgmt_beacon(struct ieee80211com *ic, struct mbuf *m0,
 		return;
 	}
 
+	// Table 4.4 Elements and fields in a probe response frame body
 	/*
 	 * beacon/probe response frame format
 	 *	[8] time stamp
@@ -2109,6 +2110,7 @@ ieee80211_recv_mgmt_beacon(struct ieee80211com *ic, struct mbuf *m0,
 	 */
 	IEEE80211_VERIFY_LENGTH(efrm - frm, 12);
 	memset(&scan, 0, sizeof(scan));
+	// 获取扫描结果
 	scan.sp_tstamp  = frm;				frm += 8;
 	scan.sp_bintval = le16toh(*(u_int16_t *)frm);	frm += 2;
 	scan.sp_capinfo = le16toh(*(u_int16_t *)frm);	frm += 2;
@@ -2131,7 +2133,7 @@ ieee80211_recv_mgmt_beacon(struct ieee80211com *ic, struct mbuf *m0,
 			/* XXX: we don't do anything with this? */
 			scan.sp_country = frm;
 			break;
-		case IEEE80211_ELEMID_FHPARMS:
+		case IEEE80211_ELEMID_FHPARMS: // Frequency-Hopping (FH)
 			IEEE80211_VERIFY_LENGTH(frm[1], 5);
 			if (ic->ic_phytype == IEEE80211_T_FH) {
 				scan.sp_fhdwell = LE_READ_2(&frm[2]);
@@ -3046,6 +3048,7 @@ ieee80211_recv_mgmt(struct ieee80211com *ic, struct mbuf *m0,
 	switch (subtype) {
 	case IEEE80211_FC0_SUBTYPE_PROBE_RESP:
 	case IEEE80211_FC0_SUBTYPE_BEACON:
+		// 收到 probe 帧回复
 		ieee80211_recv_mgmt_beacon(ic, m0, ni, subtype, rssi, rstamp);
 		return;
 

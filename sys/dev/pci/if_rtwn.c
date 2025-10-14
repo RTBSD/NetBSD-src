@@ -376,8 +376,8 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 
 	// 初始化网络接口
 	if_initialize(ifp);
-	ic->ic_debug |= IEEE80211_MSG_SCAN | IEEE80211_MSG_AUTH | IEEE80211_MSG_ASSOC | \
-				    IEEE80211_MSG_NODE;
+	/* ic->ic_debug |= IEEE80211_MSG_SCAN | IEEE80211_MSG_AUTH | IEEE80211_MSG_ASSOC | \
+				    IEEE80211_MSG_NODE; */
 	// 初始化 802.11 网络接口
 	ieee80211_ifattach(ic);
 	/* Use common softint-based if_input */
@@ -2279,6 +2279,7 @@ rtwn_watchdog(struct ifnet *ifp)
 		}
 		ifp->if_timer = 1;
 	}
+	// 80211 定时任务
 	ieee80211_watchdog(ic);
 }
 
