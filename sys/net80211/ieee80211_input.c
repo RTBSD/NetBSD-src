@@ -730,6 +730,7 @@ ieee80211_input(struct ieee80211com *ic, struct mbuf *m,
 		return IEEE80211_FC0_TYPE_DATA;
 
 	case IEEE80211_FC0_TYPE_MGT:
+		// 接收到的是管理帧
 		ret = ieee80211_input_management(ic, &m, ni, rssi, rstamp);
 		if (ret == -1) {
 			goto out;
@@ -2343,6 +2344,7 @@ ieee80211_recv_mgmt_beacon(struct ieee80211com *ic, struct mbuf *m0,
 	}
 }
 
+// 探测回复帧会以支持的最低速率回复
 static void
 ieee80211_recv_mgmt_probe_req(struct ieee80211com *ic, struct mbuf *m0,
     struct ieee80211_node *ni, int subtype, int rssi, u_int32_t rstamp)

@@ -572,6 +572,7 @@ ieee80211_getmgtframe(u_int8_t **frm, u_int pktlen)
 	IASSERT(len <= MCLBYTES, ("802.11 mgt frame too large: %u", len));
 
 	if (len <= MHLEN) {
+		// 分配一个包含 packet header 的 mbuf
 		m = m_gethdr(M_NOWAIT, MT_HEADER);
 		/*
 		 * Align the data in case additional headers are added.
@@ -579,6 +580,7 @@ ieee80211_getmgtframe(u_int8_t **frm, u_int pktlen)
 		 * which only happens for shared key authentication mgt
 		 * frames which all fit in MHLEN.
 		 */
+		// 调整 mbuf 的数据缓冲区，使之对齐
 		if (m != NULL)
 			m_align(m, len);
 	} else {
@@ -586,6 +588,7 @@ ieee80211_getmgtframe(u_int8_t **frm, u_int pktlen)
 	}
 
 	if (m != NULL) {
+		// 管理帧都有一个固定的长度为 24 字节的 MAC 头
 		m->m_data += sizeof(struct ieee80211_frame);
 		*frm = m->m_data;
 		IASSERT((uintptr_t)*frm % 4 == 0, ("bad beacon boundary"));

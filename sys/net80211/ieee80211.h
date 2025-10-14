@@ -58,13 +58,14 @@ struct ieee80211_plcp_hdr {
 /*
  * generic definitions for IEEE 802.11 frames
  */
+// Figure 4.1 Management frame structure
 struct ieee80211_frame {
-	u_int8_t	i_fc[2];
-	u_int8_t	i_dur[2];
-	u_int8_t	i_addr1[IEEE80211_ADDR_LEN];
-	u_int8_t	i_addr2[IEEE80211_ADDR_LEN];
-	u_int8_t	i_addr3[IEEE80211_ADDR_LEN];
-	u_int8_t	i_seq[2];
+	u_int8_t	i_fc[2]; // frame control
+	u_int8_t	i_dur[2]; // duration
+	u_int8_t	i_addr1[IEEE80211_ADDR_LEN]; // da
+	u_int8_t	i_addr2[IEEE80211_ADDR_LEN]; // sa
+	u_int8_t	i_addr3[IEEE80211_ADDR_LEN]; // bssid
+	u_int8_t	i_seq[2]; // seq-ctl
 	/* possibly followed by addr4[IEEE80211_ADDR_LEN]; */
 	/* see below */
 } __packed;

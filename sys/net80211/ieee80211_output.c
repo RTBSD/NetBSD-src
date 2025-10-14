@@ -1041,6 +1041,7 @@ ieee80211_add_xrates(u_int8_t *frm, const struct ieee80211_rateset *rs)
 u_int8_t *
 ieee80211_add_ssid(u_int8_t *frm, const u_int8_t *ssid, u_int len)
 {
+	// F ig u r e 4.6 Request Information element
 	*frm++ = IEEE80211_ELEMID_SSID;
 	*frm++ = len;
 	memcpy(frm, ssid, len);
@@ -1322,10 +1323,10 @@ ieee80211_add_wme_param(u_int8_t *frm, struct ieee80211_wme_state *wme)
  */
 int
 ieee80211_send_probereq(struct ieee80211_node *ni,
-	const u_int8_t sa[IEEE80211_ADDR_LEN],
-	const u_int8_t da[IEEE80211_ADDR_LEN],
-	const u_int8_t bssid[IEEE80211_ADDR_LEN],
-	const u_int8_t *ssid, size_t ssidlen,
+	const u_int8_t sa[IEEE80211_ADDR_LEN], // 帧的源地址
+	const u_int8_t da[IEEE80211_ADDR_LEN], // 帧的目标地址，通常是全ff的广播地址
+	const u_int8_t bssid[IEEE80211_ADDR_LEN], // AP BSSID 掩码
+	const u_int8_t *ssid, size_t ssidlen, // ssid = 0，所有附近的 AP 都会回复 
 	const void *optie, size_t optielen)
 {
 	struct ieee80211com *ic = ni->ni_ic;
@@ -1365,8 +1366,9 @@ ieee80211_send_probereq(struct ieee80211_node *ni,
 		return ENOMEM;
 	}
 
+	// Table 7-14—Probe Request frame body
 	frm = ieee80211_add_ssid(frm, ssid, ssidlen);
-	mode = ieee80211_chan2mode(ic, ic->ic_curchan);
+	mode = ieee80211_chan2mode(ic, ic->ic_curchan); // 当前通道对应的模式
 	frm = ieee80211_add_rates(frm, &ic->ic_sup_rates[mode]);
 	frm = ieee80211_add_xrates(frm, &ic->ic_sup_rates[mode]);
 

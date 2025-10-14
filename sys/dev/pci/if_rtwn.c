@@ -1,5 +1,6 @@
 /*	$NetBSD: if_rtwn.c,v 1.20 2021/06/16 00:21:18 riastradh Exp $	*/
 /*	$OpenBSD: if_rtwn.c,v 1.5 2015/06/14 08:02:47 stsp Exp $	*/
+// 不支持 802.11n
 #define	IEEE80211_NO_HT
 /*-
  * Copyright (c) 2010 Damien Bergamini <damien.bergamini@free.fr>
@@ -68,7 +69,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_rtwn.c,v 1.20 2021/06/16 00:21:18 riastradh Exp $
 #ifdef RTWN_DEBUG
 #define DPRINTF(x)	do { if (rtwn_debug) printf x; } while (0)
 #define DPRINTFN(n, x)	do { if (rtwn_debug >= (n)) printf x; } while (0)
-int rtwn_debug = 2;
+int rtwn_debug = 0;
 #else
 #define DPRINTF(x)
 #define DPRINTFN(n, x)
@@ -375,6 +376,8 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 
 	// 初始化网络接口
 	if_initialize(ifp);
+	ic->ic_debug |= IEEE80211_MSG_SCAN | IEEE80211_MSG_AUTH | IEEE80211_MSG_ASSOC | \
+				    IEEE80211_MSG_NODE;
 	// 初始化 802.11 网络接口
 	ieee80211_ifattach(ic);
 	/* Use common softint-based if_input */
@@ -485,6 +488,7 @@ rtwn_setup_rx_desc(struct rtwn_softc *sc, struct r92c_rx_desc_pci *desc,
 	desc->rxdw0 = htole32(SM(R92C_RXDW0_PKTLEN, len) |
 		((idx == RTWN_RX_LIST_COUNT - 1) ? R92C_RXDW0_EOR : 0));
 	desc->rxbufaddr = htole32(addr);
+	// 内存壁障
 	bus_space_barrier(sc->sc_st, sc->sc_sh, 0, sc->sc_mapsize,
 	    BUS_SPACE_BARRIER_WRITE);
 	desc->rxdw0 |= htole32(R92C_RXDW0_OWN);
@@ -509,6 +513,7 @@ rtwn_alloc_rx_list(struct rtwn_softc *sc)
 		goto fail;
 	}
 
+	// 分配用于 DMA 传输的内存，描述符数组，在一个 segment 中
 	error = bus_dmamem_alloc(sc->sc_dmat, size, 0, 0, &rx_ring->seg, 1,
 	    &rx_ring->nsegs, BUS_DMA_NOWAIT);
 	if (error != 0) {
@@ -516,7 +521,7 @@ rtwn_alloc_rx_list(struct rtwn_softc *sc)
 		goto fail;
 	}
 
-	// 映射 DMA 空间作为描述符 rx_ring->desc
+	// 将 dmamem_alloc 分配的内存映射到内核空间，获取对应的虚拟地址 rx_ring->desc
 	error = bus_dmamem_map(sc->sc_dmat, &rx_ring->seg, rx_ring->nsegs,
 	    size, (void **)&rx_ring->desc, BUS_DMA_NOWAIT | BUS_DMA_COHERENT);
 	if (error != 0) {
@@ -538,7 +543,7 @@ rtwn_alloc_rx_list(struct rtwn_softc *sc)
 	for (i = 0; i < RTWN_RX_LIST_COUNT; i++) {
 		rx_data = &rx_ring->rx_data[i];
 
-		// 每个描述符分配一个 mbuf
+		// 每个描述符分配一个 mbuf， 单个 segement，对 boundary 没有要求
 		error = bus_dmamap_create(sc->sc_dmat, MCLBYTES, 1, MCLBYTES,
 		    0, BUS_DMA_NOWAIT, &rx_data->map);
 		if (error != 0) {
@@ -658,6 +663,7 @@ rtwn_alloc_tx_list(struct rtwn_softc *sc, int qid)
 	const size_t size = sizeof(struct r92c_tx_desc_pci) * RTWN_TX_LIST_COUNT;
 	int i = 0, error = 0;
 
+	// 创建一个 map, 用来分配 tx 描述符的缓冲区，一个 segement
 	error = bus_dmamap_create(sc->sc_dmat, size, 1, size, 0, BUS_DMA_NOWAIT,
 	    &tx_ring->map);
 	if (error != 0) {
@@ -666,6 +672,7 @@ rtwn_alloc_tx_list(struct rtwn_softc *sc, int qid)
 		goto fail;
 	}
 
+	// 分配用于 DMA 传输的内存，描述符数组，在一个 segment 中
 	error = bus_dmamem_alloc(sc->sc_dmat, size, PAGE_SIZE, 0,
 	    &tx_ring->seg, 1, &tx_ring->nsegs, BUS_DMA_NOWAIT);
 	if (error != 0) {
@@ -674,6 +681,7 @@ rtwn_alloc_tx_list(struct rtwn_softc *sc, int qid)
 		goto fail;
 	}
 
+	// 将 dmamem_alloc 分配的内存映射到内核空间，获取对应的虚拟地址 tx_ring->desc
 	error = bus_dmamem_map(sc->sc_dmat, &tx_ring->seg, tx_ring->nsegs,
 	    size, (void **)&tx_ring->desc, BUS_DMA_NOWAIT);
 	if (error != 0) {
@@ -699,6 +707,7 @@ rtwn_alloc_tx_list(struct rtwn_softc *sc, int qid)
 		  + sizeof(*desc) * ((i + 1) % RTWN_TX_LIST_COUNT));
 
 		tx_data = &tx_ring->tx_data[i];
+		// 创建 map 用来分配传输缓冲区，对应一个 mbuf
 		error = bus_dmamap_create(sc->sc_dmat, MCLBYTES, 1, MCLBYTES,
 		    0, BUS_DMA_NOWAIT, &tx_data->map);
 		if (error != 0) {
@@ -1401,11 +1410,11 @@ rtwn_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg)
 		break;
 
 	case IEEE80211_S_SCAN:
-		// 离开 scan 状态
 		if (nstate != IEEE80211_S_SCAN) {
 			/*
 			 * End of scanning
 			 */
+			// 停止扫描
 			/* flush 4-AC Queue after site_survey */
 			rtwn_write_1(sc, R92C_TXPAUSE, 0x0);
 
@@ -1464,7 +1473,7 @@ rtwn_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg)
 			/*
 			 * Begin of scanning
 			 */
-
+			// 进入扫描状态
 			/* Set gain for scanning. */
 			reg = rtwn_bb_read(sc, R92C_OFDM0_AGCCORE1(0));
 			reg = RW(reg, R92C_OFDM0_AGCCORE1_GAIN, 0x20);
@@ -1498,6 +1507,7 @@ rtwn_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg)
 		rtwn_set_chan(sc, ic->ic_curchan, NULL);
 
 		/* Start periodic scan. */
+		// 继续扫描
 		callout_schedule(&sc->scan_to, mstohz(200));
 		break;
 
@@ -2048,7 +2058,9 @@ rtwn_tx(struct rtwn_softc *sc, struct mbuf *m, struct ieee80211_node *ni)
 	} else
 		txd->txdw4 |= htole32(R92C_TXDW4_QOS);
 
-	// 从 mbuf 中加载需要发送的数据
+	// 从 mbuf 中加载需要发送的数据 _bus_dmamap_load_mbuf
+	// 将 mbuf chains 中的缓冲区映射到 DMA 传输中
+	//		data->map->dm_segs[0].ds_addr <- m->m_pkthdr / m->m_pkthdr.len
 	error = bus_dmamap_load_mbuf(sc->sc_dmat, data->map, m,
 	    BUS_DMA_NOWAIT | BUS_DMA_WRITE);
 	if (error && error != EFBIG) {

@@ -287,6 +287,7 @@ ieee80211_reset_scan(struct ieee80211com *ic)
 {
 
 	/* XXX ic_des_chan should be handled with ic_chan_active */
+	// 置位，哪些信道需要被扫描
 	if (ic->ic_des_chan != IEEE80211_CHAN_ANYC) {
 		memset(ic->ic_chan_scan, 0, sizeof(ic->ic_chan_scan));
 		setbit(ic->ic_chan_scan,
@@ -296,8 +297,10 @@ ieee80211_reset_scan(struct ieee80211com *ic)
 			sizeof(ic->ic_chan_active));
 #ifdef IEEE80211_DEBUG
 	if (ieee80211_msg_scan(ic)) {
+		// 扫描哪些信道
 		printf("%s: scan set:", __func__);
 		dump_chanlist(ic->ic_chan_scan);
+		// 开始扫描的信道
 		printf(" start chan %u\n",
 			ieee80211_chan2ieee(ic, ic->ic_curchan));
 	}
@@ -322,6 +325,7 @@ ieee80211_begin_scan(struct ieee80211com *ic, int reset)
 		ic->ic_stats.is_scan_active++;
 	} else
 		ic->ic_stats.is_scan_passive++;
+	// 主动扫描、被动扫描，nt_scangen=2 表示第一次扫描 INIT->SCAN
 	IEEE80211_DPRINTF(ic, IEEE80211_MSG_SCAN,
 		"begin %s scan in %s mode, scangen %u\n",
 		(ic->ic_flags & IEEE80211_F_ASCAN) ?  "active" : "passive",
@@ -330,10 +334,13 @@ ieee80211_begin_scan(struct ieee80211com *ic, int reset)
 	/*
 	 * Clear scan state and flush any previously seen AP's.
 	 */
+	// 重置扫描信道信息
 	ieee80211_reset_scan(ic);
+	// 是否丢弃之前的扫描结果
 	if (reset)
 		ieee80211_free_allnodes(&ic->ic_scan);
 
+	// 无线网卡状态标记为扫描中
 	ic->ic_flags |= IEEE80211_F_SCAN;
 
 	/* Scan the next channel. */
@@ -358,14 +365,18 @@ ieee80211_next_scan(struct ieee80211com *ic)
 
 	chan = ic->ic_curchan;
 	do {
+		// 下一个扫描的信道
 		if (++chan > &ic->ic_channels[IEEE80211_CHAN_MAX])
 			chan = &ic->ic_channels[0];
+		// 不要重复扫描信道
 		if (isset(ic->ic_chan_scan, ieee80211_chan2ieee(ic, chan))) {
+			// 标记此信道已经被扫描过了
 			clrbit(ic->ic_chan_scan, ieee80211_chan2ieee(ic, chan));
 			IEEE80211_DPRINTF(ic, IEEE80211_MSG_SCAN,
 			    "%s: chan %d->%d\n", __func__,
 			    ieee80211_chan2ieee(ic, ic->ic_curchan),
 			    ieee80211_chan2ieee(ic, chan));
+			// 更新当前信道
 			ic->ic_curchan = chan;
 			/*
 			 * XXX drivers should do this as needed,
@@ -373,6 +384,7 @@ ieee80211_next_scan(struct ieee80211com *ic)
 			 */
 			ic->ic_bss->ni_rates =
 				ic->ic_sup_rates[ieee80211_chan2mode(ic, chan)];
+			// 开始扫描当前信道
 			ieee80211_new_state(ic, IEEE80211_S_SCAN, -1);
 			return 1;
 		}
@@ -398,6 +410,8 @@ ieee80211_probe_curchan(struct ieee80211com *ic, int force)
 		/*
 		 * XXX send both broadcast+directed probe request
 		 */
+		// 发送探测帧，如果之前设置了 ssid，就是发送定向探测帧，只有目标
+		//	ssud 收到探测帧后会回复
 		ieee80211_send_probereq(ic->ic_bss,
 			ic->ic_myaddr, ifp->if_broadcastaddr,
 			ifp->if_broadcastaddr,
@@ -1861,6 +1875,7 @@ node_reclaim(struct ieee80211_node_table *nt, struct ieee80211_node *ni)
 
 	IEEE80211_NODE_LOCK_ASSERT(nt);
 
+	// 回收 node
 	IEEE80211_DPRINTF(ni->ni_ic, IEEE80211_MSG_NODE,
 		"%s: remove %p<%s> from %s table, refcnt %d\n",
 		__func__, ni, ether_sprintf(ni->ni_macaddr),
