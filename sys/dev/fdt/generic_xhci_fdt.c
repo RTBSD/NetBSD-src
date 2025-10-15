@@ -125,6 +125,7 @@ generic_xhci_fdt_attach(device_t parent, device_t self, void *aux)
 	sc->sc_dev = self;
 	sc->sc_bus.ub_hcpriv = sc;
 	sc->sc_bus.ub_revision = USBREV_3_0;
+	sc->sc_quirks = XHCI_32BIT_ACCESS;
 	sc->sc_ios = size;
 	sc->sc_iot = faa->faa_bst;
 	if (bus_space_map(sc->sc_iot, addr, size, 0, &sc->sc_ioh) != 0) {

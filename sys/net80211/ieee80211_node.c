@@ -564,6 +564,7 @@ ieee80211_match_bss(struct ieee80211com *ic, struct ieee80211_node *ni)
 	if (rate & IEEE80211_RATE_BASIC)
 		fail |= 0x08;
 
+	// 存在期望连接的 SSID，且和扫描到的 SSID 能够匹配
 	if (ic->ic_des_esslen != 0 &&
 	    (ni->ni_esslen != ic->ic_des_esslen ||
 	     memcmp(ni->ni_essid, ic->ic_des_essid, ic->ic_des_esslen) != 0))
@@ -797,11 +798,12 @@ notfound:
 
 	IEEE80211_NODE_LOCK(nt);
 	TAILQ_FOREACH(ni, &nt->nt_node, ni_list) {
+		// 查找匹配的待连接节点
 		if (ieee80211_match_bss(ic, ni) == 0) {
 			if (selbs == NULL)
-				selbs = ni;
+				selbs = ni; // 第一次找到一个能够连接的 AP
 			else if (ieee80211_node_compare(ic, ni, selbs) > 0)
-				selbs = ni;
+				selbs = ni; // 比较新匹配的节点是否更加合适连接
 		}
 	}
 	if (selbs != NULL)		/* NB: grab ref while dropping lock */
@@ -810,6 +812,7 @@ notfound:
 
 	if (selbs == NULL)
 		goto notfound;
+	// STATION 准备连接 AP
 	if (!ieee80211_sta_join(ic, selbs)) {
 		ieee80211_free_node(selbs);
 		goto notfound;
@@ -908,7 +911,7 @@ ieee80211_sta_join(struct ieee80211com *ic, struct ieee80211_node *selbs)
 	ieee80211_wme_initparams(ic);
 
 	if (ic->ic_opmode == IEEE80211_M_STA)
-		ieee80211_new_state(ic, IEEE80211_S_AUTH, -1);
+		ieee80211_new_state(ic, IEEE80211_S_AUTH, -1); // 切换状态机，去认证连接 SSID
 	else
 		ieee80211_new_state(ic, IEEE80211_S_RUN, -1);
 	return 1;

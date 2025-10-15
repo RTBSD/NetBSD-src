@@ -1512,6 +1512,7 @@ rtwn_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg)
 		break;
 
 	case IEEE80211_S_AUTH:
+		// 进入认证连接状态
 		/* Set initial gain under link. */
 		reg = rtwn_bb_read(sc, R92C_OFDM0_AGCCORE1(0));
 #ifdef doaslinux

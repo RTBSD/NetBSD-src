@@ -416,7 +416,10 @@ usb_dmaaddr(usb_dma_t *dma, unsigned int offset)
 void
 usb_syncmem(usb_dma_t *p, bus_addr_t offset, bus_size_t len, int ops)
 {
-
+	__asm__ __volatile__("dsb sy" \
+							:     \
+							:     \
+							: "memory");
 	bus_dmamap_sync(p->udma_block->tag, p->udma_block->map,
 	    p->udma_offs + offset, len, ops);
 }

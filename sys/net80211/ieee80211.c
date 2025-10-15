@@ -879,21 +879,24 @@ ieee80211_watchdog(struct ieee80211com *ic)
 	int need_inact_timer = 0;
 
 	if (ic->ic_state != IEEE80211_S_INIT) {
+		// ic_mgt_timer 需要等待几个管理帧，如果管理帧等待完成后更新状态机 SCAN
 		if (ic->ic_mgt_timer && --ic->ic_mgt_timer == 0)
 			ieee80211_new_state(ic, IEEE80211_S_SCAN, 0);
 		nt = &ic->ic_scan;
 		if (nt->nt_inact_timer) {
+			// 处理 node 的 timeout 操作
 			if (--nt->nt_inact_timer == 0)
-				nt->nt_timeout(nt);
+				nt->nt_timeout(nt); // ieee80211_timeout_scan_candidates
 			need_inact_timer += nt->nt_inact_timer;
 		}
 		nt = &ic->ic_sta;
 		if (nt->nt_inact_timer) {
 			if (--nt->nt_inact_timer == 0)
-				nt->nt_timeout(nt);
+				nt->nt_timeout(nt); // ieee80211_timeout_stations
 			need_inact_timer += nt->nt_inact_timer;
 		}
 	}
+	// 下次还需要进入 slowtmo
 	if (ic->ic_mgt_timer != 0 || need_inact_timer)
 		ic->ic_ifp->if_timer = 1;
 }

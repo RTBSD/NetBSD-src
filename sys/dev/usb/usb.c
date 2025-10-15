@@ -100,7 +100,7 @@ USBHIST_DEFINE(usbhist) = KERNHIST_INITIALIZER(usbhist, usbhistbuf);
  */
 int	usb_noexplore = 0;
 
-int	usbdebug = 0;
+int	usbdebug = 1;
 SYSCTL_SETUP(sysctl_hw_usb_setup, "sysctl hw.usb setup")
 {
 	int err;

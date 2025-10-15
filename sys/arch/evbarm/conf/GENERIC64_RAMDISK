@@ -1,0 +1,6 @@
+include "arch/evbarm/conf/GENERIC64"
+
+no options MEMORY_DISK_DYNAMIC
+options MEMORY_DISK_IS_ROOT
+options MEMORY_DISK_RBFLAGS=RB_SINGLE
+options MEMORY_DISK_ROOT_SIZE=6144

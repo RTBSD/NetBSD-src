@@ -106,7 +106,7 @@ SDT_PROBE_DEFINE2(usb, hub, interrupt, ,
 #ifndef UHUB_DEBUG
 #define uhubdebug 0
 #else
-static int uhubdebug = 0;
+static int uhubdebug = 4;
 
 SYSCTL_SETUP(sysctl_hw_uhub_setup, "sysctl hw.uhub setup")
 {

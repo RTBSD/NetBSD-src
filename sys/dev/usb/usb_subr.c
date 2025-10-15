@@ -958,6 +958,7 @@ usbd_setup_pipe_flags(struct usbd_device *dev, struct usbd_interface *iface,
 	cv_init(&p->up_callingcv, "usbpipecb");
 	p->up_abortlwp = NULL;
 
+	// xhci_open
 	err = dev->ud_bus->ub_methods->ubm_open(p);
 	if (err) {
 		DPRINTF("endpoint=%#jx failed, error=%jd",
@@ -1386,6 +1387,7 @@ usbd_new_device(device_t parent, struct usbd_bus *bus, int depth, int speed,
 
 	KASSERT(usb_in_event_thread(parent));
 
+	// xhci_new_device
 	if (bus->ub_methods->ubm_newdev != NULL)
 		return (bus->ub_methods->ubm_newdev)(parent, bus, depth, speed,
 		    port, up);

@@ -1045,6 +1045,7 @@ ieee80211_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg
 		switch (ostate) {
 		case IEEE80211_S_INIT:
 		case IEEE80211_S_SCAN:
+			// 从 SCAN -> AUTH 状态，发送 AUTH 管理帧
 			IEEE80211_SEND_MGMT(ic, ni,
 			    IEEE80211_FC0_SUBTYPE_AUTH, 1);
 			break;
@@ -1089,6 +1090,7 @@ ieee80211_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg
 				"%s: invalid transition\n", __func__);
 			break;
 		case IEEE80211_S_AUTH:
+			// 从认证状态进入连接状态，发送 ASSOC 管理帧
 			IEEE80211_SEND_MGMT(ic, ni,
 			    IEEE80211_FC0_SUBTYPE_ASSOC_REQ, 0);
 			break;

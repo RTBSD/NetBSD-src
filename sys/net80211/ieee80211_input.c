@@ -1182,6 +1182,7 @@ ieee80211_auth_open(struct ieee80211com *ic, struct ieee80211_frame *wh,
 			ic->ic_stats.is_rx_auth_fail++;
 			ieee80211_new_state(ic, IEEE80211_S_SCAN, 0);
 		} else {
+			// 认证成功，进入 ASSOC 状态
 			ieee80211_new_state(ic, IEEE80211_S_ASSOC,
 			    wh->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK);
 		}
@@ -3057,11 +3058,13 @@ ieee80211_recv_mgmt(struct ieee80211com *ic, struct mbuf *m0,
 		return;
 
 	case IEEE80211_FC0_SUBTYPE_AUTH:
+		// 收到 auth 帧回复
 		ieee80211_recv_mgmt_auth(ic, m0, ni, subtype, rssi, rstamp);
 		return;
 
 	case IEEE80211_FC0_SUBTYPE_ASSOC_REQ:
 	case IEEE80211_FC0_SUBTYPE_REASSOC_REQ:
+		// 收到 assoc 帧回复
 		ieee80211_recv_mgmt_assoc_req(ic, m0, ni, subtype, rssi, rstamp);
 		return;
 

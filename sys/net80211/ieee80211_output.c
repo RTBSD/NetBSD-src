@@ -220,8 +220,9 @@ ieee80211_mgmt_output(struct ieee80211com *ic, struct ieee80211_node *ni,
 		/*
 		 * Set the mgt frame timeout.
 		 */
-		// 下一次进入 ieee80211_watchdog 时需要进行处理
+		// 下一次进入 ieee80211_watchdog 时需要进行处理， timer = 等待的时长
 		ic->ic_mgt_timer = timer;
+		// 需要调用 if_slowtimo
 		ifp->if_timer = 1;
 	}
 	if_start_lock(ifp);
@@ -1573,14 +1574,17 @@ ieee80211_send_mgmt(struct ieee80211com *ic, struct ieee80211_node *ni,
 			+ (need_challenge ?
 				sizeof(u_int16_t)+IEEE80211_CHALLENGE_LEN : 0);
 
+		// 为新的管理帧分配一个 mbuf
 		m = ieee80211_getmgtframe(&frm, frm_size);
 		if (m == NULL)
 			senderr(ENOMEM, is_tx_nobuf);
 
+		// 认证算法，0：open system, 1: shared key
 		((u_int16_t *)frm)[0] =
 		      is_shared_key ? htole16(IEEE80211_AUTH_ALG_SHARED)
 		                    : htole16(IEEE80211_AUTH_ALG_OPEN);
 		((u_int16_t *)frm)[1] = htole16(arg);	/* sequence number */
+		// 2-byte auth trans sequence num: current state of progress
 		((u_int16_t *)frm)[2] = htole16(status);/* status */
 
 		if (need_challenge) {
@@ -1629,6 +1633,7 @@ ieee80211_send_mgmt(struct ieee80211com *ic, struct ieee80211_node *ni,
 
 	case IEEE80211_FC0_SUBTYPE_ASSOC_REQ:
 	case IEEE80211_FC0_SUBTYPE_REASSOC_REQ:
+		// Table 4.6 Elements and fields in the association request body
 		/*
 		 * asreq frame format
 		 *	[2] capability information
@@ -1692,7 +1697,7 @@ ieee80211_send_mgmt(struct ieee80211com *ic, struct ieee80211_node *ni,
 		}
 		m->m_pkthdr.len = m->m_len = frm - mtod(m, u_int8_t *);
 
-		timer = IEEE80211_TRANS_WAIT;
+		timer = IEEE80211_TRANS_WAIT; // 这次管理帧发送后等待多久可以收到回复
 		break;
 
 	case IEEE80211_FC0_SUBTYPE_ASSOC_RESP:
@@ -1768,6 +1773,7 @@ ieee80211_send_mgmt(struct ieee80211com *ic, struct ieee80211_node *ni,
 		senderr(EINVAL, is_tx_unknownmgt);
 		/* NOTREACHED */
 	}
+	// 发送准备好的管理帧
 	ret = ieee80211_mgmt_output(ic, ni, m, type, timer);
 	if (ret != 0) {
 bad:

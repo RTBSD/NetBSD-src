@@ -82,8 +82,8 @@ options 	ARMV81_PAN
 #options 	MIIVERBOSE	# verbose PHY autoconfig messages
 #options 	PCIVERBOSE	# verbose PCI device autoconfig messages
 #options 	PCMCIAVERBOSE	# verbose PCMCIA configuration messages
-#options 	SCSIVERBOSE	# human readable SCSI error messages
-#options 	USBVERBOSE	# verbose USB device autoconfig messages
+options 	SCSIVERBOSE	# human readable SCSI error messages
+options 	USBVERBOSE	# verbose USB device autoconfig messages
 
 makeoptions	DEBUG="-g"	# compile full symbol table
 makeoptions	COPY_SYMTAB=1
@@ -97,6 +97,14 @@ options 	EXEC_ELF32	# for a.out, but here we need it for elf32)
 #options 	COMPAT_LINUX32	# binary compatibility with Linux 32-bit
 #options 	COMPAT_50	# COMPAT_LINUX depends on
 #options 	COMPAT_OSSAUDIO # binary compatibility with Linux
+
+#options 	USB_DEBUG
+#options 	EHCI_DEBUG
+#options 	OHCI_DEBUG
+#options 	UHUB_DEBUG
+#options    XHCI_DEBUG
+#options  	KERNHIST
+#options  	KERNHIST_PRINT
 
 # EFI runtime support
 options 	EFI_RUNTIME
@@ -567,6 +575,15 @@ mpt*		at pci? dev ? function ?
 # SCSI bus support
 scsibus*	at scsi?
 sd*		at scsibus? target ? lun ?	# SCSI disk drives
+
+# USB
+usb*		at ohci?
+usb*		at ehci?
+usb*		at xhci?
+uhub*		at usb?
+uhub*		at uhub? port ?
+umass*		at uhub? port ? configuration ? interface ?
+scsibus* 	at umass? channel ?
 
 # WLAN support
 rtwn*	at pci? dev ? function ?	# Realtek 8188CE/8192CE 802.11b/g/n

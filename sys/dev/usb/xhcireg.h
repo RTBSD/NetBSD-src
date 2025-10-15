@@ -92,7 +92,7 @@
 #define	 XHCI_HCC_PAE(x)	__SHIFTOUT((x), __BIT(8))	/* Parse All Event Data */
 #define	 XHCI_HCC_SPC(x)	__SHIFTOUT((x), __BIT(9))	/* Short packet */
 #define	 XHCI_HCC_SEC(x)	__SHIFTOUT((x), __BIT(10))	/* Stopped EDTLA */
-#define	 XHCI_HCC_CFC(x)	__SHIFTOUT((x), __BIT(11))	/* Configuous Frame ID */
+#define	 XHCI_HCC_CFC(x)	__SHIFTOUT((x), __BIT(11))	/* Contiguous Frame ID */
 #define	 XHCI_HCC_MAXPSASIZE_MASK __BITS(15, 12)	/* max pri. stream array size */
 #define	 XHCI_HCC_MAXPSASIZE(x)	__SHIFTOUT((x), XHCI_HCC_MAXPSASIZE_MASK)
 #define	 XHCI_HCC_XECP_MASK	__BITS(31, 16)		/* extended capabilities pointer */
@@ -103,7 +103,7 @@
 #define XHCI_HCCPARAMS2		0x1c	/* RO capability parameters 2 */
 #define	 XHCI_HCC2_U3C(x)	__SHIFTOUT((x), __BIT(0))	/* U3 Entry capable */
 #define	 XHCI_HCC2_CMC(x)	__SHIFTOUT((x), __BIT(1))	/* CEC MaxExLatTooLg */
-#define	 XHCI_HCC2_FSC(x)	__SHIFTOUT((x), __BIT(2))	/* Foce Save Context */
+#define	 XHCI_HCC2_FSC(x)	__SHIFTOUT((x), __BIT(2))	/* Force Save Context */
 #define	 XHCI_HCC2_CTC(x)	__SHIFTOUT((x), __BIT(3))	/* Compliance Transc */
 #define	 XHCI_HCC2_LEC(x)	__SHIFTOUT((x), __BIT(4))	/* Large ESIT Payload */
 #define	 XHCI_HCC2_CIC(x)	__SHIFTOUT((x), __BIT(5))	/* Configuration Inf */
@@ -258,7 +258,7 @@
 /* 5.4.9.2 */
 #define	 XHCI_PM2_L1S_MASK	__BITS(2, 0)	/* RO - L1 status */
 #define	 XHCI_PM2_L1S_GET(x)	__SHIFTOUT((x), XHCI_PM2_L1S_MASK)
-#define	 XHCI_PM2_RWE		__BIT(3)	/* RW - remote wakup enable */
+#define	 XHCI_PM2_RWE		__BIT(3)	/* RW - remote wakeup enable */
 #define	 XHCI_PM2_BESL_MASK	__BITS(7, 4)	/* RW - Best Effort Service Latency */
 #define	 XHCI_PM2_BESL_GET(x)	__SHIFTOUT((x), XHCI_PM2_BESL_MASK)
 #define	 XHCI_PM2_BESL_SET(x)	__SHIFTIN((x), XHCI_PM2_BESL_MASK)

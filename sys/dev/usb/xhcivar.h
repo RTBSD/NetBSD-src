@@ -107,6 +107,7 @@ struct xhci_softc {
 	int sc_maxslots;
 	int sc_maxintrs;
 	int sc_maxspbuf;
+	int sc_isthresh;		/* value in frames */
 
 	/*
 	 * Port routing and root hub - xHCI 4.19.7
@@ -149,6 +150,7 @@ struct xhci_softc {
 	int sc_quirks;
 #define XHCI_QUIRK_INTEL	__BIT(0) /* Intel xhci chip */
 #define XHCI_DEFERRED_START	__BIT(1)
+#define XHCI_32BIT_ACCESS	__BIT(2)
 	uint32_t sc_hcc;		/* copy of HCCPARAMS1 */
 	uint32_t sc_hcc2;		/* copy of HCCPARAMS2 */
 
