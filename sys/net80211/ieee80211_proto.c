@@ -1008,6 +1008,10 @@ ieee80211_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg
 				ieee80211_create_ibss(ic, ic->ic_des_chan);
 			} else {
 				// 开始扫描 SSID
+				IEEE80211_DPRINTF(ic, IEEE80211_MSG_SCAN,
+					"start %s scan from %s...\n",
+					(ic->ic_flags & IEEE80211_F_ASCAN) ?  "active" : "passive",
+					__func__);
 				ieee80211_begin_scan(ic, arg);
 			}
 			break;
@@ -1016,8 +1020,11 @@ ieee80211_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg
 			 * Scan next. If doing an active scan probe
 			 * for the requested ap (if any).
 			 */
-			if (ic->ic_flags & IEEE80211_F_ASCAN)
+			if (ic->ic_flags & IEEE80211_F_ASCAN) {
+				IEEE80211_DPRINTF(ic, IEEE80211_MSG_SCAN,
+					"sending probe frame from %s\n", __func__);
 				ieee80211_probe_curchan(ic, 0);
+			}
 			break;
 		case IEEE80211_S_RUN:
 			/* beacon miss */

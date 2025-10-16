@@ -69,7 +69,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_rtwn.c,v 1.20 2021/06/16 00:21:18 riastradh Exp $
 #ifdef RTWN_DEBUG
 #define DPRINTF(x)	do { if (rtwn_debug) printf x; } while (0)
 #define DPRINTFN(n, x)	do { if (rtwn_debug >= (n)) printf x; } while (0)
-int rtwn_debug = 0;
+int rtwn_debug = 1;
 #else
 #define DPRINTF(x)
 #define DPRINTFN(n, x)
@@ -1504,10 +1504,11 @@ rtwn_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg)
 		rtwn_write_1(sc, R92C_TXPAUSE,
 		    rtwn_read_1(sc, R92C_TXPAUSE) | 0x0f);
 
+		// 使用信道 ic_curchan
 		rtwn_set_chan(sc, ic->ic_curchan, NULL);
 
 		/* Start periodic scan. */
-		// 继续扫描
+		// 进入rtwn_next_scan，执行一次 ???
 		callout_schedule(&sc->scan_to, mstohz(200));
 		break;
 
@@ -1812,7 +1813,7 @@ rtwn_rx_frame(struct rtwn_softc *sc, struct r92c_rx_desc_pci *rx_desc,
 	if (infosz != 0 && (rxdw0 & R92C_RXDW0_PHYST)) {
 		phy = mtod(rx_data->m, struct r92c_rx_phystat *);
 		rssi = rtwn_get_rssi(sc, rate, phy);
-		/* Update our average RSSI. */
+		/* Update our average RSSI. */ // 获取信号强度
 		rtwn_update_avgrssi(sc, rate, rssi);
 	}
 
@@ -2291,7 +2292,7 @@ rtwn_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 	struct ieee80211com *ic = &sc->sc_ic;
 	int s, error = 0;
 
-	DPRINTFN(3, ("%s: %s: cmd=0x%08lx, data=%p\n", device_xname(sc->sc_dev),
+	DPRINTFN(1, ("%s: %s: cmd=0x%08lx, data=%p\n", device_xname(sc->sc_dev),
 	    __func__, cmd, data));
 
 	s = splnet();

@@ -158,6 +158,7 @@ ieee80211_node_lateattach(struct ieee80211com *ic)
 	ic->ic_tim_len = howmany(ic->ic_max_aid, 8) * sizeof(u_int8_t);
 	ic->ic_tim_bitmap = malloc(ic->ic_tim_len, M_DEVBUF, M_WAITOK | M_ZERO);
 
+	// station node table 和 scan node table
 	ieee80211_node_table_init(ic, &ic->ic_sta, "station",
 		IEEE80211_INACT_INIT, ic->ic_crypto.cs_max_keyix,
 		ieee80211_timeout_stations);
@@ -513,7 +514,9 @@ ieee80211_reset_bss(struct ieee80211com *ic)
 {
 	struct ieee80211_node *ni, *obss;
 
+	/* scan candidates */
 	ieee80211_node_table_reset(&ic->ic_scan);
+	/* stations/neighbors */
 	ieee80211_node_table_reset(&ic->ic_sta);
 
 	ni = ieee80211_alloc_node(&ic->ic_scan, ic->ic_myaddr);
@@ -793,6 +796,7 @@ notfound:
 	}
 
 	selbs = NULL;
+	// 打印扫描信息
 	IEEE80211_DPRINTF(ic, IEEE80211_MSG_SCAN, "\t%s\n",
 	    "macaddr          bssid         chan  rssi rate flag  wep  essid");
 
@@ -1086,6 +1090,7 @@ ieee80211_setup_node(struct ieee80211_node_table *nt,
 	ni->ni_chan = IEEE80211_CHAN_ANYC;
 	ni->ni_authmode = IEEE80211_AUTH_OPEN;
 	ni->ni_txpower = ic->ic_txpowlimit;	/* max power */
+	// 加密方式初始化为 NONE
 	ieee80211_crypto_resetkey(ic, &ni->ni_ucastkey, IEEE80211_KEYIX_NONE);
 	ni->ni_inact_reload = nt->nt_inact_init;
 	ni->ni_inact = ni->ni_inact_reload;
@@ -1255,11 +1260,12 @@ dump_probe_beacon(u_int8_t subtype, int isnew,
 	const u_int8_t mac[IEEE80211_ADDR_LEN],
 	const struct ieee80211_scanparams *sp)
 {
-
+	// 收到的是 beacon 帧还是 probe_resp 帧
 	printf("[%s] %s%s on chan %u (bss chan %u) ",
 	    ether_sprintf(mac), isnew ? "new " : "",
 	    ieee80211_mgt_subtype_name[subtype >> IEEE80211_FC0_SUBTYPE_SHIFT],
 	    sp->sp_chan, sp->sp_bchan);
+	// 打印发现的 SSID
 	ieee80211_print_essid(sp->sp_ssid + 2, sp->sp_ssid[1]);
 	printf("\n");
 
@@ -1306,8 +1312,9 @@ ieee80211_add_scan(struct ieee80211com *ic,
 	struct ieee80211_node *ni;
 	int newnode = 0;
 
+	// 从 scan table 中查找关联当前扫描到 SSID 的 node, 用 MAC address 作为查找 key
 	ni = ieee80211_find_node(nt, wh->i_addr2);
-	if (ni == NULL) {
+	if (ni == NULL) { // 如果没有，分配一个 node 在 scan table 中描述这个 SSID
 		/*
 		 * Create a new entry.
 		 */
@@ -1316,6 +1323,7 @@ ieee80211_add_scan(struct ieee80211com *ic,
 			ic->ic_stats.is_rx_nodealloc++;
 			return;
 		}
+		// 设置新的 node，用 MAC address 作为 key
 		ieee80211_setup_node(nt, ni, wh->i_addr2);
 
 		/*
@@ -1324,12 +1332,14 @@ ieee80211_add_scan(struct ieee80211com *ic,
 		ni->ni_authmode = ic->ic_bss->ni_authmode;
 		ni->ni_txpower = ic->ic_bss->ni_txpower;
 		ni->ni_vlan = ic->ic_bss->ni_vlan;	/* XXX?? */
+		// 设置 node 对应的信道
 		ieee80211_set_chan(ic, ni, ic->ic_curchan);
 		ni->ni_rsn = ic->ic_bss->ni_rsn;
 		newnode = 1;
 	}
 
 #ifdef IEEE80211_DEBUG
+	// 打印 beacon 包的详细信息
 	if (ieee80211_msg_scan(ic) && (ic->ic_flags & IEEE80211_F_SCAN))
 		dump_probe_beacon(subtype, newnode, wh->i_addr2, sp);
 #endif
@@ -2540,6 +2550,7 @@ ieee80211_node_table_init(struct ieee80211com *ic,
 	nt->nt_name = name;
 	nt->nt_scangen = 1;
 	nt->nt_inact_init = inact;
+	// node 的超时处理函数
 	nt->nt_timeout = timeout;
 	nt->nt_keyixmax = keyixmax;
 	if (nt->nt_keyixmax > 0) {

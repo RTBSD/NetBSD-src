@@ -457,6 +457,7 @@ ieee80211_input_management(struct ieee80211com *ic, struct mbuf **mp,
 
 	bpf_mtap3(ic->ic_rawbpf, m, BPF_D_IN);
 	(*ic->ic_recv_mgmt)(ic, m, ni, subtype, rssi, rstamp);
+	// 处理完成，释放接收管理帧对应的 mbuf
 	m_freem(m);
 
 	*mp = NULL;
@@ -2075,8 +2076,11 @@ ieee80211_recv_mgmt_beacon(struct ieee80211com *ic, struct mbuf *m0,
 	IEEE80211_DEBUGVAR(char ebuf[3 * ETHER_ADDR_LEN]);
 	struct ieee80211_scanparams scan;
 
+	// MAC header
 	wh = mtod(m0, struct ieee80211_frame *);
+	// Frame body
 	frm = (u_int8_t *)(wh + 1);
+	// Extend frame body
 	efrm = mtod(m0, u_int8_t *) + m0->m_len;
 
 	/*
@@ -2087,14 +2091,14 @@ ieee80211_recv_mgmt_beacon(struct ieee80211com *ic, struct mbuf *m0,
 	 *    o adhoc mode (to discover neighbors)
 	 * Frames otherwise received are discarded.
 	 */
-	if (!((ic->ic_flags & IEEE80211_F_SCAN) ||
-	      (ic->ic_opmode == IEEE80211_M_STA && ni->ni_associd) ||
+	if (!((ic->ic_flags & IEEE80211_F_SCAN) || // 不是在扫描过程中
+	      (ic->ic_opmode == IEEE80211_M_STA && ni->ni_associd) || // 作为 STATION 已经完成了 associate 连接
 	       ic->ic_opmode == IEEE80211_M_IBSS)) {
-		ic->ic_stats.is_rx_mgtdiscard++;
+		ic->ic_stats.is_rx_mgtdiscard++; // 丢弃掉接收到的管理帧
 		return;
 	}
 
-	// Table 4.4 Elements and fields in a probe response frame body
+	// Figure 4.5 Beacon frame structure
 	/*
 	 * beacon/probe response frame format
 	 *	[8] time stamp
@@ -2112,25 +2116,25 @@ ieee80211_recv_mgmt_beacon(struct ieee80211com *ic, struct mbuf *m0,
 	IEEE80211_VERIFY_LENGTH(efrm - frm, 12);
 	memset(&scan, 0, sizeof(scan));
 	// 获取扫描结果
-	scan.sp_tstamp  = frm;				frm += 8;
-	scan.sp_bintval = le16toh(*(u_int16_t *)frm);	frm += 2;
-	scan.sp_capinfo = le16toh(*(u_int16_t *)frm);	frm += 2;
-	scan.sp_bchan = ieee80211_chan2ieee(ic, ic->ic_curchan);
+	scan.sp_tstamp  = frm;				frm += 8; // Timestamp
+	scan.sp_bintval = le16toh(*(u_int16_t *)frm);	frm += 2; // Beacon interval
+	scan.sp_capinfo = le16toh(*(u_int16_t *)frm);	frm += 2; // Capability info
+	scan.sp_bchan = ieee80211_chan2ieee(ic, ic->ic_curchan); // 当前扫描的信道 = SSID 所在的信道
 	scan.sp_chan = scan.sp_bchan;
 
-	while (frm + 1 < efrm) {
-		IEEE80211_VERIFY_LENGTH(efrm - frm, frm[1] + 2);
+	while (frm + 1 < efrm) { // 解析 frame body 的剩余字段，都是 element id 的 key-value 格式
+		IEEE80211_VERIFY_LENGTH(efrm - frm, frm[1] + 2); // 验证长度是足够的
 
-		switch (*frm) {
-		case IEEE80211_ELEMID_SSID:
+		switch (*frm) { // Table 4.2 Elements and fields in a beacon frame body
+		case IEEE80211_ELEMID_SSID: // Service Set Identifier (SSID)
 			/* no length check needed */
 			scan.sp_ssid = frm;
 			break;
-		case IEEE80211_ELEMID_RATES:
+		case IEEE80211_ELEMID_RATES: // Supported rates
 			/* no length check needed */
 			scan.sp_rates = frm;
 			break;
-		case IEEE80211_ELEMID_COUNTRY:
+		case IEEE80211_ELEMID_COUNTRY: // Country
 			/* XXX: we don't do anything with this? */
 			scan.sp_country = frm;
 			break;
@@ -2142,7 +2146,7 @@ ieee80211_recv_mgmt_beacon(struct ieee80211com *ic, struct mbuf *m0,
 				scan.sp_fhindex = frm[6];
 			}
 			break;
-		case IEEE80211_ELEMID_DSPARMS:
+		case IEEE80211_ELEMID_DSPARMS: // DS Parameter Set
 			/*
 			 * XXX hack this since depending on phytype
 			 * is problematic for multi-mode devices.
@@ -2151,18 +2155,18 @@ ieee80211_recv_mgmt_beacon(struct ieee80211com *ic, struct mbuf *m0,
 			if (ic->ic_phytype != IEEE80211_T_FH)
 				scan.sp_chan = frm[2];
 			break;
-		case IEEE80211_ELEMID_TIM:
+		case IEEE80211_ELEMID_TIM: // Traffic indication map (TIM)
 			/* XXX ATIM? */
 			IEEE80211_VERIFY_LENGTH(frm[1], 4);
 			scan.sp_tim = frm;
 			scan.sp_timoff = frm - mtod(m0, u_int8_t *);
 			break;
-		case IEEE80211_ELEMID_IBSSPARMS:
+		case IEEE80211_ELEMID_IBSSPARMS: // IBSS Parameter Set
 			break;
-		case IEEE80211_ELEMID_XRATES:
+		case IEEE80211_ELEMID_XRATES: // Extended Supported Rates
 			scan.sp_xrates = frm;
 			break;
-		case IEEE80211_ELEMID_ERP:
+		case IEEE80211_ELEMID_ERP: // ERP Information
 			if (frm[1] != 1) {
 				IEEE80211_DISCARD_IE(ic, IEEE80211_MSG_ELEMID,
 				    wh, "ERP", "bad len %u", frm[1]);
@@ -2171,11 +2175,11 @@ ieee80211_recv_mgmt_beacon(struct ieee80211com *ic, struct mbuf *m0,
 			}
 			scan.sp_erp = frm[2];
 			break;
-		case IEEE80211_ELEMID_RSN:
+		case IEEE80211_ELEMID_RSN: // RSN
 			/* no length check needed */
 			scan.sp_wpa = frm;
 			break;
-		case IEEE80211_ELEMID_VENDOR:
+		case IEEE80211_ELEMID_VENDOR: // Vendor Specific
 			/* no length check needed */
 			if (iswpaoui(frm))
 				scan.sp_wpa = frm;
@@ -2190,9 +2194,10 @@ ieee80211_recv_mgmt_beacon(struct ieee80211com *ic, struct mbuf *m0,
 			break;
 		}
 
-		frm += frm[1] + 2;
+		frm += frm[1] + 2; // 继续解析下一个 element
 	}
 
+	// 验证从 beacon 包中收到的速率和 SSID 信息
 	IEEE80211_VERIFY_ELEMENT(scan.sp_rates, IEEE80211_RATE_MAXSIZE);
 	IEEE80211_VERIFY_ELEMENT(scan.sp_ssid, IEEE80211_NWID_LEN);
 
@@ -2200,7 +2205,7 @@ ieee80211_recv_mgmt_beacon(struct ieee80211com *ic, struct mbuf *m0,
 #if IEEE80211_CHAN_MAX < 255
 	    scan.sp_chan > IEEE80211_CHAN_MAX ||
 #endif
-	    isclr(ic->ic_chan_active, scan.sp_chan)) {
+	    isclr(ic->ic_chan_active, scan.sp_chan)) { // 如果无线网卡硬件不支持此信道，或者信道被标记为 inactive
 		IEEE80211_DISCARD(ic,
 		    IEEE80211_MSG_ELEMID | IEEE80211_MSG_INPUT,
 		    wh, ieee80211_mgt_subtype_name[subtype >>
@@ -2211,7 +2216,7 @@ ieee80211_recv_mgmt_beacon(struct ieee80211com *ic, struct mbuf *m0,
 	}
 
 	if (scan.sp_chan != scan.sp_bchan &&
-	    ic->ic_phytype != IEEE80211_T_FH) {
+	    ic->ic_phytype != IEEE80211_T_FH) { // 接收到的包不属于当前扫描信道，丢弃
 		/*
 		 * Frame was received on a channel different from the
 		 * one indicated in the DS params element id;
@@ -2232,7 +2237,7 @@ ieee80211_recv_mgmt_beacon(struct ieee80211com *ic, struct mbuf *m0,
 	}
 
 	if (!(IEEE80211_BINTVAL_MIN <= scan.sp_bintval &&
-	      scan.sp_bintval <= IEEE80211_BINTVAL_MAX)) {
+	      scan.sp_bintval <= IEEE80211_BINTVAL_MAX)) { // beacon 包的发送间隔不合法，丢弃
 		IEEE80211_DISCARD(ic,
 		    IEEE80211_MSG_ELEMID | IEEE80211_MSG_INPUT,
 		    wh, ieee80211_mgt_subtype_name[subtype >>
@@ -2249,7 +2254,7 @@ ieee80211_recv_mgmt_beacon(struct ieee80211com *ic, struct mbuf *m0,
 
 	/*
 	 * Count frame now that we know it's to be processed.
-	 */
+	 */ // 这个 beacon 包是需要被处理的，加入统计中
 	if (subtype == IEEE80211_FC0_SUBTYPE_BEACON) {
 		ic->ic_stats.is_rx_beacon++;
 		IEEE80211_NODE_STAT(ni, rx_beacons);
@@ -2334,7 +2339,7 @@ ieee80211_recv_mgmt_beacon(struct ieee80211com *ic, struct mbuf *m0,
 			 *
 			 * XXX check if the beacon we recv'd gives
 			 * us what we need and suppress the probe req
-			 */
+			 */ // 即使收到了 beacon 帧，还是在当前信道做一次主动扫描
 			ieee80211_probe_curchan(ic, 1);
 			ic->ic_flags_ext &= ~IEEE80211_FEXT_PROBECHAN;
 		}
@@ -3047,8 +3052,8 @@ ieee80211_recv_mgmt(struct ieee80211com *ic, struct mbuf *m0,
 	wh = mtod(m0, struct ieee80211_frame *);
 
 	switch (subtype) {
-	case IEEE80211_FC0_SUBTYPE_PROBE_RESP:
-	case IEEE80211_FC0_SUBTYPE_BEACON:
+	case IEEE80211_FC0_SUBTYPE_PROBE_RESP: // 主动发送 Probe 帧后收到的回复
+	case IEEE80211_FC0_SUBTYPE_BEACON: // 被动接收到 AP 发出的 Beacon 帧
 		// 收到 probe 帧回复
 		ieee80211_recv_mgmt_beacon(ic, m0, ni, subtype, rssi, rstamp);
 		return;

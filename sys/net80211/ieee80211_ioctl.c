@@ -496,6 +496,7 @@ ieee80211_setupscan(struct ieee80211com *ic, const u_int8_t chanlist[])
 	 * altering the current state but that's not possible right now.
 	 */
 	/* XXX handle proberequest case */
+	// 重置状态
 	ic->ic_state = IEEE80211_S_INIT;	/* XXX bypass state machine */
 	return 0;
 }
@@ -2426,7 +2427,7 @@ ieee80211_ioctl_set80211(struct ieee80211com *ic, u_long cmd,
 		if (ic->ic_opmode == IEEE80211_M_HOSTAP)	/* XXX ignore */
 			break;
 		error = ieee80211_setupscan(ic, ic->ic_chan_avail);
-		if (error == 0)		/* XXX background scan */
+		if (error == 0)		/* XXX background scan */ // 切换状态为 SCAN
 			error = ieee80211_new_state(ic, IEEE80211_S_SCAN, -1);
 		break;
 	case IEEE80211_IOC_ADDMAC:
@@ -2600,6 +2601,7 @@ ieee80211_ioctl(struct ieee80211com *ic, u_long cmd, void *data)
 			error = EINVAL;
 			break;
 		}
+		// 设置用户想要连接的 SSID
 		memset(ic->ic_des_essid, 0, IEEE80211_NWID_LEN);
 		ic->ic_des_esslen = nwid.i_len;
 		memcpy(ic->ic_des_essid, nwid.i_nwid, nwid.i_len);
