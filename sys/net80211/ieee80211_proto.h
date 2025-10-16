@@ -228,18 +228,9 @@ void	ieee80211_wme_initparams(struct ieee80211com *);
 void	ieee80211_wme_updateparams(struct ieee80211com *);
 void	ieee80211_wme_updateparams_locked(struct ieee80211com *);
 
-/* #define	ieee80211_new_state(_ic, _nstate, _arg) \
-	(((_ic)->ic_newstate)((_ic), (_nstate), (_arg))) */
-#define ieee80211_new_state(_ic, _nstate, _arg) \
-    ({ \
-        typeof((_ic)->ic_newstate((_ic), (_nstate), (_arg))) __result; \
-        if (ic->ic_state != _nstate) { \
-			IEEE80211_DPRINTF(ic, IEEE80211_MSG_ANY, \
-					"%s %d: switching\n", __func__, __LINE__); \
-		} \
-        __result = ((_ic)->ic_newstate((_ic), (_nstate), (_arg))); \
-        __result; \
-    })
+#define	ieee80211_new_state(_ic, _nstate, _arg) \
+	(((_ic)->ic_newstate)((_ic), (_nstate), (_arg)))
+
 int	ieee80211_compute_duration(const struct ieee80211_frame_min *,
 		const struct ieee80211_key *, int,
 		uint32_t, int, int, struct ieee80211_duration *,
