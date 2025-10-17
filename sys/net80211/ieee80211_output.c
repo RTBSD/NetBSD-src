@@ -1550,6 +1550,7 @@ ieee80211_send_mgmt(struct ieee80211com *ic, struct ieee80211_node *ni,
 	case IEEE80211_FC0_SUBTYPE_AUTH: {
 		status = arg >> 16;
 		arg &= 0xffff;
+		// arg = 1, AUTH_SHARED_REQUEST
 		const bool has_challenge =
 		    (arg == IEEE80211_AUTH_SHARED_CHALLENGE ||
 		     arg == IEEE80211_AUTH_SHARED_RESPONSE) &&
@@ -1579,6 +1580,7 @@ ieee80211_send_mgmt(struct ieee80211com *ic, struct ieee80211_node *ni,
 		if (m == NULL)
 			senderr(ENOMEM, is_tx_nobuf);
 
+		// frame body
 		// 认证算法，0：open system, 1: shared key
 		((u_int16_t *)frm)[0] =
 		      is_shared_key ? htole16(IEEE80211_AUTH_ALG_SHARED)
@@ -1587,6 +1589,7 @@ ieee80211_send_mgmt(struct ieee80211com *ic, struct ieee80211_node *ni,
 		// 2-byte auth trans sequence num: current state of progress
 		((u_int16_t *)frm)[2] = htole16(status);/* status */
 
+		// challenge text
 		if (need_challenge) {
 			((u_int16_t *)frm)[3] =
 			    htole16((IEEE80211_CHALLENGE_LEN << 8) |
@@ -1675,20 +1678,20 @@ ieee80211_send_mgmt(struct ieee80211com *ic, struct ieee80211_node *ni,
 		if ((ni->ni_capinfo & IEEE80211_CAPINFO_SHORT_SLOTTIME) &&
 		    (ic->ic_caps & IEEE80211_C_SHSLOT))
 			capinfo |= IEEE80211_CAPINFO_SHORT_SLOTTIME;
-		*(u_int16_t *)frm = htole16(capinfo);
+		*(u_int16_t *)frm = htole16(capinfo); // Capability Information
 		frm += 2;
 
-		*(u_int16_t *)frm = htole16(ic->ic_lintval);
+		*(u_int16_t *)frm = htole16(ic->ic_lintval); // Listen interval
 		frm += 2;
 
 		if (type == IEEE80211_FC0_SUBTYPE_REASSOC_REQ) {
-			IEEE80211_ADDR_COPY(frm, ic->ic_bss->ni_bssid);
+			IEEE80211_ADDR_COPY(frm, ic->ic_bss->ni_bssid); // SSID
 			frm += IEEE80211_ADDR_LEN;
 		}
 
 		frm = ieee80211_add_ssid(frm, ni->ni_essid, ni->ni_esslen);
-		frm = ieee80211_add_rates(frm, &ni->ni_rates);
-		frm = ieee80211_add_xrates(frm, &ni->ni_rates);
+		frm = ieee80211_add_rates(frm, &ni->ni_rates); // Supported rates
+		frm = ieee80211_add_xrates(frm, &ni->ni_rates); // Extended Supported Rates
 		if ((ic->ic_flags & IEEE80211_F_WME) && ni->ni_wme_ie != NULL)
 			frm = ieee80211_add_wme_info(frm, &ic->ic_wme);
 		if (ic->ic_opt_ie != NULL) {

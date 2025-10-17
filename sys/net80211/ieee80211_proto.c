@@ -1048,7 +1048,7 @@ ieee80211_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg
 			break;
 		}
 		break;
-	case IEEE80211_S_AUTH:
+	case IEEE80211_S_AUTH: // 新状态是 AUTH
 		switch (ostate) {
 		case IEEE80211_S_INIT:
 		case IEEE80211_S_SCAN:
@@ -1088,7 +1088,7 @@ ieee80211_newstate(struct ieee80211com *ic, enum ieee80211_state nstate, int arg
 			break;
 		}
 		break;
-	case IEEE80211_S_ASSOC:
+	case IEEE80211_S_ASSOC: // 新状态是 ASSOC
 		switch (ostate) {
 		case IEEE80211_S_INIT:
 		case IEEE80211_S_SCAN:

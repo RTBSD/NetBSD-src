@@ -682,10 +682,10 @@ callout_setfunc(callout_t *cs, void (*func)(void *), void *arg)
 	KASSERT(c->c_magic == CALLOUT_MAGIC);
 	KASSERT(func != NULL);
 
-	lock = callout_lock(c);
+	lock = callout_lock(c); // 加锁
 	SDT_PROBE4(sdt, kernel, callout, setfunc,  cs, func, arg, c->c_flags);
-	c->c_func = func;
-	c->c_arg = arg;
+	c->c_func = func; // timeout 回调
+	c->c_arg = arg; // timeout 回调参数
 	mutex_spin_exit(lock);
 }
 

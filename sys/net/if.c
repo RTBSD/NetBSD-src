@@ -2665,7 +2665,7 @@ if_slowtimo_intr(void *arg)
 				    &isd->isd_work, NULL);
 			}
 		} else
-			callout_schedule(&isd->isd_ch, hz / IFNET_SLOWHZ);
+			callout_schedule(&isd->isd_ch, hz / IFNET_SLOWHZ); // slowtime 一秒钟执行一次
 	}
 	mutex_exit(&isd->isd_lock);
 }

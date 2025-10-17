@@ -389,7 +389,7 @@ ieee80211_next_scan(struct ieee80211com *ic)
 			ieee80211_new_state(ic, IEEE80211_S_SCAN, -1);
 			return 1;
 		}
-	} while (chan != ic->ic_curchan);
+	} while (chan != ic->ic_curchan); // ？？？SCAN 的退出条件，扫描完所有信道
 
 	ieee80211_end_scan(ic);
 	return 0;
@@ -695,6 +695,7 @@ ieee80211_end_scan(struct ieee80211com *ic)
 	struct ieee80211_node *ni, *selbs;
 
 	ieee80211_cancel_scan(ic);
+	// 提示扫描完成
 	ieee80211_notify_scan_done(ic);
 
 #ifndef IEEE80211_NO_HOSTAP
@@ -762,6 +763,7 @@ ieee80211_end_scan(struct ieee80211com *ic)
 	 */
 	/* NB: unlocked read should be ok */
 	if (TAILQ_FIRST(&nt->nt_node) == NULL) {
+		// 没有扫描到 AP 作为 node
 		IEEE80211_DPRINTF(ic, IEEE80211_MSG_SCAN,
 			"%s: no scan candidate\n", __func__);
 
@@ -897,11 +899,12 @@ ieee80211_sta_join(struct ieee80211com *ic, struct ieee80211_node *selbs)
 	/*
 	 * Committed to selbs, setup state.
 	 */
-	obss = ic->ic_bss;
+	// selbs 是选择加入的 AP node
+	obss = ic->ic_bss; // old bss
 	ic->ic_bss = selbs;		/* NB: caller assumed to bump refcnt */
 	if (obss != NULL) {
 		copy_bss(selbs, obss);
-		ieee80211_free_node(obss);
+		ieee80211_free_node(obss); // 释放原来连接的 node
 	}
 
 	/*
@@ -909,6 +912,7 @@ ieee80211_sta_join(struct ieee80211com *ic, struct ieee80211_node *selbs)
 	 * the auto-select case; this should be redundant if the
 	 * mode is locked.
 	 */
+	// 通过信道，获取模式，是 80211b, g, n 之类的
 	ic->ic_curmode = ieee80211_chan2mode(ic, selbs->ni_chan);
 	ic->ic_curchan = selbs->ni_chan;
 	ieee80211_reset_erp(ic);

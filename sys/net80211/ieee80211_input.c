@@ -1182,7 +1182,7 @@ ieee80211_auth_open(struct ieee80211com *ic, struct ieee80211_frame *wh,
 
 			ic->ic_stats.is_rx_auth_fail++;
 			ieee80211_new_state(ic, IEEE80211_S_SCAN, 0);
-		} else {
+		} else { // status is success
 			// 认证成功，进入 ASSOC 状态
 			ieee80211_new_state(ic, IEEE80211_S_ASSOC,
 			    wh->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK);
@@ -2340,6 +2340,8 @@ ieee80211_recv_mgmt_beacon(struct ieee80211com *ic, struct mbuf *m0,
 			 * XXX check if the beacon we recv'd gives
 			 * us what we need and suppress the probe req
 			 */ // 即使收到了 beacon 帧，还是在当前信道做一次主动扫描
+			IEEE80211_DPRINTF(ic, IEEE80211_MSG_SCAN,
+				"sending probe frame from %s\n", __func__);
 			ieee80211_probe_curchan(ic, 1);
 			ic->ic_flags_ext &= ~IEEE80211_FEXT_PROBECHAN;
 		}
@@ -2475,6 +2477,7 @@ ieee80211_recv_mgmt_auth(struct ieee80211com *ic, struct mbuf *m0,
 	frm = (u_int8_t *)(wh + 1);
 	efrm = mtod(m0, u_int8_t *) + m0->m_len;
 
+	// auth frame body
 	/*
 	 * auth frame format
 	 *	[2] algorithm
@@ -2483,9 +2486,9 @@ ieee80211_recv_mgmt_auth(struct ieee80211com *ic, struct mbuf *m0,
 	 *	[tlv*] challenge
 	 */
 	IEEE80211_VERIFY_LENGTH(efrm - frm, 6);
-	algo   = le16toh(*(u_int16_t *)frm);
-	seq    = le16toh(*(u_int16_t *)(frm + 2));
-	status = le16toh(*(u_int16_t *)(frm + 4));
+	algo   = le16toh(*(u_int16_t *)frm); // 0 = open system, 1 = shared key
+	seq    = le16toh(*(u_int16_t *)(frm + 2)); // current state of progress
+	status = le16toh(*(u_int16_t *)(frm + 4)); // status code, 0 = success
 
 	IEEE80211_DPRINTF(ic, IEEE80211_MSG_AUTH,
 	    "[%s] recv auth frame with algorithm %d seq %d\n",
@@ -2806,6 +2809,7 @@ ieee80211_recv_mgmt_assoc_resp(struct ieee80211com *ic, struct mbuf *m0,
 		return;
 	}
 
+	// frame body
 	/*
 	 * asresp frame format
 	 *	[2] capability information
@@ -2817,9 +2821,9 @@ ieee80211_recv_mgmt_assoc_resp(struct ieee80211com *ic, struct mbuf *m0,
 	 */
 	IEEE80211_VERIFY_LENGTH(efrm - frm, 6);
 	ni = ic->ic_bss;
-	capinfo = le16toh(*(u_int16_t *)frm);
+	capinfo = le16toh(*(u_int16_t *)frm); // Capability Information
 	frm += 2;
-	status = le16toh(*(u_int16_t *)frm);
+	status = le16toh(*(u_int16_t *)frm); // Status Code, association 是否成功
 	frm += 2;
 	if (status != 0) {
 		IEEE80211_DPRINTF(ic, IEEE80211_MSG_ASSOC,
@@ -2831,7 +2835,7 @@ ieee80211_recv_mgmt_assoc_resp(struct ieee80211com *ic, struct mbuf *m0,
 		ic->ic_stats.is_rx_auth_fail++;	/* XXX */
 		return;
 	}
-	associd = le16toh(*(u_int16_t *)frm);
+	associd = le16toh(*(u_int16_t *)frm); // Association ID
 	frm += 2;
 
 	rates = xrates = wme = NULL;
@@ -2840,10 +2844,10 @@ ieee80211_recv_mgmt_assoc_resp(struct ieee80211com *ic, struct mbuf *m0,
 
 		switch (*frm) {
 		case IEEE80211_ELEMID_RATES:
-			rates = frm;
+			rates = frm; // Supported rates
 			break;
 		case IEEE80211_ELEMID_XRATES:
-			xrates = frm;
+			xrates = frm; // Extended Supported Rates
 			break;
 		case IEEE80211_ELEMID_VENDOR:
 			if (iswmeoui(frm))
@@ -2874,7 +2878,7 @@ ieee80211_recv_mgmt_assoc_resp(struct ieee80211com *ic, struct mbuf *m0,
 	}
 
 	ni->ni_capinfo = capinfo;
-	ni->ni_associd = associd;
+	ni->ni_associd = associd; // 收到 AID，可以和 AP 开始通信
 	if (wme != NULL && ieee80211_parse_wmeparams(ic, wme, wh) >= 0) {
 		ni->ni_flags |= IEEE80211_NODE_QOS;
 		ieee80211_wme_updateparams(ic);
