@@ -177,6 +177,7 @@
 ./boot/dtb/rockchip/rk3368-px5-evb.dtb                       dtb-base-boot  dtb
 ./boot/dtb/rockchip/rk3368-r88.dtb                           dtb-base-boot  dtb
 ./boot/dtb/rockchip/rk3399-evb.dtb                           dtb-base-boot  dtb
+./boot/dtb/rockchip/rk3399-emb3531.dtb                       dtb-base-boot  dtb
 ./boot/dtb/rockchip/rk3399-ficus.dtb                         dtb-base-boot  dtb
 ./boot/dtb/rockchip/rk3399-firefly.dtb                       dtb-base-boot  dtb
 ./boot/dtb/rockchip/rk3399-gru-bob.dtb                       dtb-base-boot  dtb
