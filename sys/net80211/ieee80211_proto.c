@@ -360,6 +360,16 @@ ieee80211_dump_pkt(const u_int8_t *buf, int len, int rate, int rssi)
 	}
 }
 
+void
+ieee80211_dump_rate_set(struct ieee80211_node *ni)
+{
+	struct ieee80211_rateset *rs = &ni->ni_rates;
+	printf("ni@%p ssid=%s nrates=%d\n", ni, (const char *)ni->ni_essid, rs->rs_nrates);
+	for (int i = 0; i < rs->rs_nrates; i++) {
+		printf("	[%d]=0x%x\n", i, rs->rs_rates[i]);
+	}
+}
+
 int
 ieee80211_fix_rate(struct ieee80211_node *ni, int flags)
 {
@@ -374,11 +384,13 @@ ieee80211_fix_rate(struct ieee80211_node *ni, int flags)
 	 * If the fixed rate check was requested but no
 	 * fixed has been defined then just remove it.
 	 */
+	// 需要设置固定速率，fixed-rate
 	if ((flags & IEEE80211_R_DOFRATE) &&
 	    ic->ic_fixed_rate == IEEE80211_FIXED_RATE_NONE)
 		flags &= ~IEEE80211_R_DOFRATE;
 	error = 0;
 	okrate = badrate = fixedrate = 0;
+	// 获取 PHYMODE，转换成频率
 	srs = &ic->ic_sup_rates[ieee80211_chan2mode(ic, ni->ni_chan)];
 	nrs = &ni->ni_rates;
 	for (i = 0; i < nrs->rs_nrates; ) {
@@ -457,10 +469,15 @@ ieee80211_fix_rate(struct ieee80211_node *ni, int flags)
 		i++;
 	}
 	if (okrate == 0 || error != 0 ||
-	    ((flags & IEEE80211_R_DOFRATE) && fixedrate == 0))
+	    ((flags & IEEE80211_R_DOFRATE) && fixedrate == 0)) {
+		if (strcmp(ni->ni_essid, ic->ic_des_essid) == 0)
+			printf("%s: basic_rate okrate=%d error=%d flags=0x%x, fixedrate=%d\n", __func__, okrate, error, (flags & IEEE80211_R_DOFRATE), fixedrate);
 		return badrate | IEEE80211_RATE_BASIC;
-	else
+	} else {
+		if (strcmp(ni->ni_essid, ic->ic_des_essid) == 0)
+			printf("%s: okrate=%d error=%d flags=0x%x, fixedrate=%d\n", __func__, okrate, error, (flags & IEEE80211_R_DOFRATE), fixedrate);
 		return RV(okrate);
+	}
 #undef RV
 }
 

@@ -1402,6 +1402,10 @@ ieee80211_send_probereq(struct ieee80211_node *ni,
 	    "[%s] send probe req on channel %u\n",
 	    ether_sprintf(wh->i_addr1),
 	    ieee80211_chan2ieee(ic, ic->ic_curchan));
+#ifdef IEEE80211_DEBUG
+		//if (ieee80211_msg_dumppkts(ic))
+		//	ieee80211_dump_pkt(mtod(m, void *), m->m_len, -1, -1);
+#endif
 
 	// 管理帧入队，准备发送
 	IF_ENQUEUE(&ic->ic_mgtq, m);
@@ -1699,6 +1703,12 @@ ieee80211_send_mgmt(struct ieee80211com *ic, struct ieee80211_node *ni,
 			frm += ic->ic_opt_ie_len;
 		}
 		m->m_pkthdr.len = m->m_len = frm - mtod(m, u_int8_t *);
+#ifdef IEEE80211_DEBUG
+		if (ieee80211_msg_dumppkts(ic) && (strcmp(ni->ni_essid, ic->ic_des_essid) == 0)) {
+			printf("%s (assoc req): ", __func__);
+			ieee80211_dump_pkt(mtod(m, void *), m->m_len, -1, -1);
+		}
+#endif
 
 		timer = IEEE80211_TRANS_WAIT; // 这次管理帧发送后等待多久可以收到回复
 		break;

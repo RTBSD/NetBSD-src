@@ -328,6 +328,7 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 	ic->ic_state = IEEE80211_S_INIT;
 
 	/* Set device capabilities. */
+	// 设置无线网卡的支持能力
 	ic->ic_caps =
 	    IEEE80211_C_MONITOR |	/* Monitor mode supported. */
 	    IEEE80211_C_IBSS |		/* IBSS mode supported */
@@ -348,10 +349,12 @@ rtwn_attach(device_t parent, device_t self, void *aux)
 #endif
 
 	/* Set supported .11b and .11g rates. */
+	// 该无线模块支持 802.11 b/g，支持相应协议的速率
 	ic->ic_sup_rates[IEEE80211_MODE_11B] = ieee80211_std_rateset_11b;
 	ic->ic_sup_rates[IEEE80211_MODE_11G] = ieee80211_std_rateset_11g;
 
 	/* Set supported .11b and .11g channels (1 through 14). */
+	// 计算出支持信道对应的频率
 	for (i = 1; i <= 14; i++) {
 		ic->ic_channels[i].ic_freq =
 		    ieee80211_ieee2mhz(i, IEEE80211_CHAN_2GHZ);
@@ -1159,7 +1162,7 @@ rtwn_ra_init(struct rtwn_softc *sc)
 	uint8_t mode;
 	int maxrate, maxbasicrate, error, i, j;
 
-	DPRINTFN(3, ("%s: %s\n", device_xname(sc->sc_dev), __func__));
+	DPRINTFN(1, ("%s: %s\n", device_xname(sc->sc_dev), __func__));
 
 	/* Get normal and basic rates mask. */
 	rates = basicrates = 0;
@@ -1171,6 +1174,8 @@ rtwn_ra_init(struct rtwn_softc *sc)
 				break;
 		if (j == __arraycount(map))	/* Unknown rate, skip. */
 			continue;
+		DPRINTFN(1, ("	rate=%d maxrate=%d basic=%d\n", 
+			rs->rs_rates[i], maxrate, (!!(rs->rs_rates[i] & IEEE80211_RATE_BASIC))));
 		rates |= 1 << j;
 		if (j > maxrate)
 			maxrate = j;

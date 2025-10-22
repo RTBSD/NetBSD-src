@@ -421,6 +421,7 @@ ieee80211_media_init_with_lock(struct ieee80211com *ic,
 	ifm_change_cb_t media_change, ifm_stat_cb_t media_stat,
 	ieee80211_media_lock_t *lock)
 {
+// 增加一个 ifmedia_entry
 #define	ADD(_ic, _s, _o) \
 	ifmedia_add(&(_ic)->ic_media, \
 		IFM_MAKEWORD(IFM_IEEE80211, (_s), (_o), 0), 0, NULL)
@@ -444,6 +445,7 @@ ieee80211_media_init_with_lock(struct ieee80211com *ic,
 	 * Fill in media characteristics.
 	 */
 	// 向网络栈注册 media 连接状态变化 cb 和 状态查询 cb
+	//  初始化 ifm->ifm_mask = 0
 	ifmedia_init_with_lock(&ic->ic_media, 0,
 	    media_change, media_stat, lock);
 	maxrate = 0;
@@ -463,9 +465,9 @@ ieee80211_media_init_with_lock(struct ieee80211com *ic,
 		if ((ic->ic_modecaps & (1<<mode)) == 0)
 			continue;
 		// 当前处理的模式对应的 media 选项
-		mopt = mopts[mode];
+		mopt = mopts[mode]; // mode 选项，是 802.11a/b/g 中的某种模式
 		ADD(ic, IFM_AUTO, mopt);	/* e.g. 11a auto */
-		// 给 media 添加支持的工作模式
+		// 给 media 添加支持的 AUTO 工作模式
 		if (ic->ic_caps & IEEE80211_C_IBSS)
 			ADD(ic, IFM_AUTO, mopt | IFM_IEEE80211_ADHOC);
 		if (ic->ic_caps & IEEE80211_C_HOSTAP)
@@ -496,19 +498,23 @@ ieee80211_media_init_with_lock(struct ieee80211com *ic,
 			 * Add rate to the collection of all rates.
 			 */
 			r = rate & IEEE80211_RATE_VAL;
+			// 检查 rate 是否已经设置到 allrates 里，如果已经设置，跳过
 			for (j = 0; j < allrates.rs_nrates; j++)
 				if (allrates.rs_rates[j] == r)
 					break;
 			if (j == allrates.rs_nrates) {
 				/* unique, add to the set */
+				// append 到 allrates 数组的末尾
 				allrates.rs_rates[j] = r;
-				allrates.rs_nrates++;
+				allrates.rs_nrates++; // 增加 allrates 数组中记录的速率
 			}
-			rate = (rate & IEEE80211_RATE_VAL) / 2;
+			rate = (rate & IEEE80211_RATE_VAL) / 2; // ？？
+			// 记录最大速率
 			if (rate > maxrate)
 				maxrate = rate;
 		}
 	}
+	// 把获取到的 allrates 增加成 media entry
 	for (i = 0; i < allrates.rs_nrates; i++) {
 		mword = ieee80211_rate2media(ic, allrates.rs_rates[i],
 				IEEE80211_MODE_AUTO);
@@ -527,6 +533,7 @@ ieee80211_media_init_with_lock(struct ieee80211com *ic,
 	}
 	// 获取当前接口的媒体状态，把结果存到imr结构体
 	ieee80211_media_status(ifp, &imr);
+	// 设置当前 active 的 media
 	ifmedia_set(&ic->ic_media, imr.ifm_active);
 
 	// maxrate是12Mbps，IF_Mbps(12)就是12*1000000
@@ -808,6 +815,7 @@ ieee80211_media_status(struct ifnet *ifp, struct ifmediareq *imr)
 		return;
 	}
 	imr->ifm_status = IFM_AVALID;
+	// link type
 	imr->ifm_active = IFM_IEEE80211;
 	// 网卡处于运行中，PHY 的状态也是 ACTIVE
 	if (ic->ic_state == IEEE80211_S_RUN)

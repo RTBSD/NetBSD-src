@@ -387,7 +387,7 @@ static int
 ieee80211_input_management(struct ieee80211com *ic, struct mbuf **mp,
     struct ieee80211_node *ni, int rssi, u_int32_t rstamp)
 {
-	IEEE80211_DEBUGVAR(char ebuf[3 * ETHER_ADDR_LEN]);
+	//IEEE80211_DEBUGVAR(char ebuf[3 * ETHER_ADDR_LEN]);
 	struct ifnet *ifp = ic->ic_ifp;
 	struct ieee80211_key *key;
 	struct ieee80211_frame *wh;
@@ -413,14 +413,14 @@ ieee80211_input_management(struct ieee80211com *ic, struct mbuf **mp,
 		goto out;
 	}
 #ifdef IEEE80211_DEBUG
-	if ((ieee80211_msg_debug(ic) && doprint(ic, subtype)) ||
-	    ieee80211_msg_dumppkts(ic)) {
-		if_printf(ic->ic_ifp, "received %s from %s rssi %d\n",
-		    ieee80211_mgt_subtype_name[subtype >>
-			IEEE80211_FC0_SUBTYPE_SHIFT],
-		    ether_snprintf(ebuf, sizeof(ebuf), wh->i_addr2),
-		    rssi);
-	}
+	// if ((ieee80211_msg_debug(ic) && doprint(ic, subtype)) ||
+	//     ieee80211_msg_dumppkts(ic)) {
+	// 	if_printf(ic->ic_ifp, "received %s from %s rssi %d\n",
+	// 	    ieee80211_mgt_subtype_name[subtype >>
+	// 		IEEE80211_FC0_SUBTYPE_SHIFT],
+	// 	    ether_snprintf(ebuf, sizeof(ebuf), wh->i_addr2),
+	// 	    rssi);
+	// }
 #endif
 
 	if (wh->i_fc[1] & IEEE80211_FC1_WEP) {
@@ -1059,11 +1059,20 @@ ieee80211_setup_rates(struct ieee80211_node *ni, const u_int8_t *rates,
 	struct ieee80211com *ic = ni->ni_ic;
 	struct ieee80211_rateset *rs = &ni->ni_rates;
 
+	IEEE80211_DPRINTF(ic, IEEE80211_MSG_XRATE, "%s: %s %s %s %s\n", __func__, 
+		flags & IEEE80211_R_DOSORT ? "sort" : "",
+		flags & IEEE80211_R_DOFRATE ? "fixrate": "",
+		flags & IEEE80211_R_DONEGO ? "negorate" : "",
+		flags & IEEE80211_R_DODEL ? "ignorerate" : "");
+
+	// 重置 rateset 数组
 	memset(rs, 0, sizeof(*rs));
 
-	rs->rs_nrates = rates[1];
+	rs->rs_nrates = rates[1]; // 获取 rates 的数目
+	// 拷贝 rates 数组
 	memcpy(rs->rs_rates, rates + 2, rs->rs_nrates);
 
+	// 处理 extend rates
 	if (xrates != NULL) {
 		u_int8_t nxrates;
 		size_t totalrate;
@@ -1088,6 +1097,13 @@ ieee80211_setup_rates(struct ieee80211_node *ni, const u_int8_t *rates,
 		memcpy(rs->rs_rates + rs->rs_nrates, xrates+2, nxrates);
 		rs->rs_nrates += nxrates;
 	}
+#ifdef IEEE80211_DEBUG
+	if (ieee80211_msg_dumppkts(ic) && (strcmp(ni->ni_essid, ic->ic_des_essid) == 0)) {
+		printf("%s (xrate=%p)(fixrate=0x%x)(flags=0x%x): ", 
+			__func__, xrates, ic->ic_fixed_rate, flags);
+		ieee80211_dump_rate_set(ni);
+	}
+#endif
 
 	return ieee80211_fix_rate(ni, flags);
 }
@@ -2799,6 +2815,13 @@ ieee80211_recv_mgmt_assoc_resp(struct ieee80211com *ic, struct mbuf *m0,
 	u_int16_t capinfo, associd;
 	u_int16_t status;
 
+#ifdef IEEE80211_DEBUG
+	if (ieee80211_msg_dumppkts(ic) && (strcmp(ni->ni_essid, ic->ic_des_essid) == 0)) {
+		printf("%s: ", __func__);
+		ieee80211_dump_pkt(mtod(m0, void *), m0->m_len, -1, -1);
+	}
+#endif
+
 	wh = mtod(m0, struct ieee80211_frame *);
 	frm = (u_int8_t *)(wh + 1);
 	efrm = mtod(m0, u_int8_t *) + m0->m_len;
@@ -2864,6 +2887,12 @@ ieee80211_recv_mgmt_assoc_resp(struct ieee80211com *ic, struct mbuf *m0,
 	rate = ieee80211_setup_rates(ni, rates, xrates,
 	    IEEE80211_R_DOSORT | IEEE80211_R_DOFRATE |
 	    IEEE80211_R_DONEGO | IEEE80211_R_DODEL);
+#ifdef IEEE80211_DEBUG
+	if (ieee80211_msg_dumppkts(ic) && (strcmp(ni->ni_essid, ic->ic_des_essid) == 0)) {
+		printf("%s: ", __func__);
+		ieee80211_dump_rate_set(ni);
+	}
+#endif
 
 	if (rate & IEEE80211_RATE_BASIC) {
 		IEEE80211_DPRINTF(ic, IEEE80211_MSG_ASSOC,
