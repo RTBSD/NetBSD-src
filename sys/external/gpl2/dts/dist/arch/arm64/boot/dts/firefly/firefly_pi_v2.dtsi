@@ -1,4 +1,4 @@
-#include "firefly.dtsi"
+#include "firefly_v2.dtsi"
 
 / {
 	compatible = "firefly,pi_v2";

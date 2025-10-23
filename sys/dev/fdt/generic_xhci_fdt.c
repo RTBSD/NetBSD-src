@@ -1,7 +1,7 @@
-/* $NetBSD: generic_xhci_fdt.c,v 1.20 2022/06/12 08:04:07 skrll Exp $ */
+/* $NetBSD: generic_xhci_fdt.c,v 1.20 2025/10/13 08:04:07 skrll Exp $ */
 
 /*-
- * Copyright (c) 2018 Jared McNeill <jmcneill@invisible.ca>
+ * Copyright (c) 2025 RTBSD <zhugengyu2023@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -80,26 +80,22 @@ generic_xhci_fdt_attach(device_t parent, device_t self, void *aux)
 	struct xhci_softc * const sc = device_private(self);
 	struct fdt_attach_args * const faa = aux;
 	const int phandle = faa->faa_phandle;
-#if 0
 	struct fdtbus_reset *rst;
 	struct fdtbus_phy *phy;
 	struct clk *clk;
-#endif
 	char intrstr[128];
 	bus_addr_t addr;
 	bus_size_t size;
+	uint32_t hccparams;
 	int error;
 	void *ih;
-#if 0
 	u_int n;
-#endif
 
 	if (fdtbus_get_reg(phandle, 0, &addr, &size) != 0) {
 		aprint_error(": couldn't get registers\n");
 		return;
 	}
 
-#if 0
 	/* Enable clocks */
 	for (n = 0; (clk = fdtbus_clock_get_index(phandle, n)) != NULL; n++)
 		if (clk_enable(clk) != 0) {
@@ -119,17 +115,24 @@ generic_xhci_fdt_attach(device_t parent, device_t self, void *aux)
 		aprint_error(": couldn't enable phy\n");
 		return;
 	}
-#endif
 
 	sc->sc_dev = self;
 	sc->sc_bus.ub_hcpriv = sc;
-	sc->sc_bus.ub_dmatag = faa->faa_dmat;
+	sc->sc_quirks = XHCI_32BIT_ACCESS | XHCI_NO_BIOS_HANDOFF;
 	sc->sc_ios = size;
 	sc->sc_iot = faa->faa_bst;
 	if (bus_space_map(sc->sc_iot, addr, size, 0, &sc->sc_ioh) != 0) {
 		aprint_error(": couldn't map registers\n");
 		return;
 	}
+
+	hccparams = bus_space_read_4(sc->sc_iot, sc->sc_ioh, XHCI_HCCPARAMS);
+	if (XHCI_HCC_AC64(hccparams)) {
+		aprint_verbose_dev(self, "64-bit DMA");
+	} else {
+		aprint_verbose_dev(self, "32-bit DMA\n");
+	}
+	sc->sc_bus.ub_dmatag = faa->faa_dmat;
 
 	if (!fdtbus_intr_str(phandle, 0, intrstr, sizeof(intrstr))) {
 		aprint_error_dev(self, "failed to decode interrupt\n");
@@ -151,6 +154,8 @@ generic_xhci_fdt_attach(device_t parent, device_t self, void *aux)
 		aprint_error_dev(self, "init failed, error = %d\n", error);
 		return;
 	}
+
+	pmf_device_register1(self, NULL, NULL, xhci_shutdown);
 
 	sc->sc_child = config_found(self, &sc->sc_bus, usbctlprint, CFARGS_NONE);
 	sc->sc_child2 = config_found(self, &sc->sc_bus2, usbctlprint,

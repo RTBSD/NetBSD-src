@@ -287,13 +287,25 @@ static const struct usbd_pipe_methods xhci_device_intr_methods = {
 static inline uint32_t
 xhci_read_1(const struct xhci_softc * const sc, bus_size_t offset)
 {
-	return bus_space_read_1(sc->sc_iot, sc->sc_ioh, offset);
+	if (ISSET(sc->sc_quirks, XHCI_32BIT_ACCESS)) {
+		uint32_t val;
+		val = bus_space_read_4(sc->sc_iot, sc->sc_ioh, offset & ~3);
+		return (val >> ((offset & 3) * NBBY)) & 0xff;
+	} else {
+		return bus_space_read_1(sc->sc_iot, sc->sc_ioh, offset);
+	}
 }
 
 static inline uint32_t
 xhci_read_2(const struct xhci_softc * const sc, bus_size_t offset)
 {
-	return bus_space_read_2(sc->sc_iot, sc->sc_ioh, offset);
+	if (ISSET(sc->sc_quirks, XHCI_32BIT_ACCESS)) {
+		uint32_t val;
+		val = bus_space_read_4(sc->sc_iot, sc->sc_ioh, offset & ~3);
+		return (val >> ((offset & 3) * NBBY)) & 0xffff;
+	} else {
+		return bus_space_read_2(sc->sc_iot, sc->sc_ioh, offset);
+	}
 }
 
 static inline uint32_t
@@ -306,7 +318,16 @@ static inline void
 xhci_write_1(const struct xhci_softc * const sc, bus_size_t offset,
     uint32_t value)
 {
-	bus_space_write_1(sc->sc_iot, sc->sc_ioh, offset, value);
+	if (ISSET(sc->sc_quirks, XHCI_32BIT_ACCESS)) {
+		const uint32_t mask = 0xffU << ((offset & 3) * NBBY);
+		uint32_t val;
+		val = bus_space_read_4(sc->sc_iot, sc->sc_ioh, offset & ~3);
+		val &= ~mask;
+		val |= __SHIFTIN(value, mask);
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh, offset & ~3, val);
+	} else {
+		bus_space_write_1(sc->sc_iot, sc->sc_ioh, offset, value);
+	}
 }
 
 #if 0 /* unused */
@@ -1280,6 +1301,10 @@ xhci_ecp(struct xhci_softc *sc)
 		}
 		case XHCI_ID_USB_LEGACY: {
 			uint8_t bios_sem;
+
+			if (ISSET(sc->sc_quirks, XHCI_NO_BIOS_HANDOFF)) {
+				break;
+			}
 
 			/* Take host controller ownership from BIOS */
 			bios_sem = xhci_read_1(sc, ecp + XHCI_XECP_BIOS_SEM);
@@ -3428,7 +3453,8 @@ xhci_update_ep0_mps(struct xhci_softc * const sc,
 	cp[1] = htole32(XHCI_INCTX_1_ADD_MASK(XHCI_DCI_EP_CONTROL));
 
 	cp = xhci_slot_get_icv(sc, xs, xhci_dci_to_ici(XHCI_DCI_EP_CONTROL));
-	cp[1] = htole32(XHCI_EPCTX_1_MAXP_SIZE_SET(mps));
+	cp[1] &= ~htole32(XHCI_EPCTX_1_MAXP_SIZE_MASK);
+	cp[1] |= htole32(XHCI_EPCTX_1_MAXP_SIZE_SET(mps));
 
 	/* sync input contexts before they are read from memory */
 	usb_syncmem(&xs->xs_ic_dma, 0, sc->sc_pgsz, BUS_DMASYNC_PREWRITE);

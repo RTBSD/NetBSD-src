@@ -149,6 +149,8 @@ struct xhci_softc {
 	int sc_quirks;
 #define XHCI_QUIRK_INTEL	__BIT(0) /* Intel xhci chip */
 #define XHCI_DEFERRED_START	__BIT(1)
+#define XHCI_32BIT_ACCESS	__BIT(2)
+#define XHCI_NO_BIOS_HANDOFF __BIT(3)
 	uint32_t sc_hcc;		/* copy of HCCPARAMS1 */
 	uint32_t sc_hcc2;		/* copy of HCCPARAMS2 */
 
