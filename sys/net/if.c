@@ -923,15 +923,15 @@ if_percpuq_enqueue(struct if_percpuq *ipq, struct mbuf *m)
 	KASSERT(ipq != NULL);
 
 	const int s = splnet();
-	ifq = percpu_getref(ipq->ipq_ifqs);
+	ifq = percpu_getref(ipq->ipq_ifqs); // 关闭抢占
 	if (IF_QFULL(ifq)) {
 		IF_DROP(ifq);
 		percpu_putref(ipq->ipq_ifqs);
 		m_freem(m);
 		goto out;
 	}
-	IF_ENQUEUE(ifq, m);
-	percpu_putref(ipq->ipq_ifqs);
+	IF_ENQUEUE(ifq, m); // packet 数据入队
+	percpu_putref(ipq->ipq_ifqs); // 打开抢占
 
 	softint_schedule(ipq->ipq_si);
 out:

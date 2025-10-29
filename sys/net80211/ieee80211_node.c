@@ -1198,6 +1198,7 @@ _ieee80211_find_node(struct ieee80211_node_table *nt,
 
 	hash = IEEE80211_NODE_HASH(macaddr);
 	LIST_FOREACH(ni, &nt->nt_hash[hash], ni_hash) {
+		// 以 mac 地址作为 key 查找 node
 		if (IEEE80211_ADDR_EQ(ni->ni_macaddr, macaddr)) {
 			ieee80211_ref_node(ni);	/* mark referenced */
 #ifdef IEEE80211_DEBUG_REFCNT
@@ -1478,9 +1479,9 @@ ieee80211_find_rxnode(struct ieee80211com *ic,
 	if (ic->ic_opmode == IEEE80211_M_STA ||
 	    ic->ic_opmode == IEEE80211_M_MONITOR ||
 	    (ic->ic_flags & IEEE80211_F_SCAN))
-		nt = &ic->ic_scan;
+		nt = &ic->ic_scan; // station 模式下，从 scan table 中查找 node
 	else
-		nt = &ic->ic_sta;
+		nt = &ic->ic_sta; // 其他模式下，从 sta table 中查找 node
 
 	/* XXX check ic_bss first in station mode */
 	/* XXX 4-address frames? */
@@ -1489,7 +1490,7 @@ ieee80211_find_rxnode(struct ieee80211com *ic,
 		ni = _ieee80211_find_node(nt, wh->i_addr1);
 	else
 		ni = _ieee80211_find_node(nt, wh->i_addr2);
-	if (ni == NULL)
+	if (ni == NULL) // 找到 node 后，增加对 node 的引用计数
 		ni = ieee80211_ref_node(ic->ic_bss);
 	IEEE80211_NODE_UNLOCK(nt);
 

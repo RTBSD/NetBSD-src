@@ -111,9 +111,10 @@ ieee80211_hdrsize(const void *data)
 	/* NB: we don't handle control frames */
 	IASSERT((wh->i_fc[0]&IEEE80211_FC0_TYPE_MASK) != IEEE80211_FC0_TYPE_CTL,
 		("%s: control frame", __func__));
+	// hdrsize 只用于管理帧和数据帧
 	if ((wh->i_fc[1] & IEEE80211_FC1_DIR_MASK) == IEEE80211_FC1_DIR_DSTODS)
 		size += IEEE80211_ADDR_LEN;
-	if (ieee80211_has_qos(wh))
+	if (ieee80211_has_qos(wh)) // 数据帧是否有 Qos 要求
 		size += sizeof(u_int16_t);
 	return size;
 }

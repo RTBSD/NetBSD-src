@@ -160,6 +160,8 @@ struct ieee80211_qosframe_addr4 {
 #define	IEEE80211_FC0_SUBTYPE_CF_ACK_CF_ACK	0x70
 #define	IEEE80211_FC0_SUBTYPE_QOS		0x80
 #define	IEEE80211_FC0_SUBTYPE_QOS_NULL		0xc0
+// Table 6.1 Data frames: valid Type and Subtype combinations (continued)
+//	定义了更多数据帧类型
 
 /*
  * DS bit usage
@@ -177,9 +179,13 @@ struct ieee80211_qosframe_addr4 {
  *  1       1       RA      TA      DA      SA      unspecified (WDS)
  */
 #define	IEEE80211_FC1_DIR_MASK			0x03
+// 通信和 AP (DS) 无关, 比如一个 STATION 发给另一个 STATION
 #define	IEEE80211_FC1_DIR_NODS			0x00	/* STA->STA */
+// 从 STATION 往上发送给 AP (DS)
 #define	IEEE80211_FC1_DIR_TODS			0x01	/* STA->AP  */
+// 从 AP (DS) 往下发送给 STATION
 #define	IEEE80211_FC1_DIR_FROMDS		0x02	/* AP ->STA */
+// WDS
 #define	IEEE80211_FC1_DIR_DSTODS		0x03	/* AP ->AP  */
 
 #define IEEE80211_IS_DSTODS(wh) \

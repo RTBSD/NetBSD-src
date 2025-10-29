@@ -165,6 +165,7 @@ ieee80211_input_data(struct ieee80211com *ic, struct mbuf **mp,
 	struct mbuf *m = *mp;
 	int hdrspace;
 
+	// 解析数据帧帧头 Figure 6.1 Frame Control field
 	wh = mtod(m, struct ieee80211_frame *);
 	dir = wh->i_fc[1] & IEEE80211_FC1_DIR_MASK;
 	subtype = wh->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK;
@@ -180,7 +181,7 @@ ieee80211_input_data(struct ieee80211com *ic, struct mbuf **mp,
 
 	switch (ic->ic_opmode) {
 	case IEEE80211_M_STA:
-		if (dir != IEEE80211_FC1_DIR_FROMDS) {
+		if (dir != IEEE80211_FC1_DIR_FROMDS) { // STATION 模式只接收来自 AP 的数据包
 			IEEE80211_DISCARD(ic, IEEE80211_MSG_INPUT,
 			    wh, "data", "unknown dir 0x%x", dir);
 			ic->ic_stats.is_rx_wrongdir++;
@@ -244,7 +245,7 @@ ieee80211_input_data(struct ieee80211com *ic, struct mbuf **mp,
 
 		/*
 		 * Check for power save state change.
-		 */
+		 */ // 进入或者离开 power save 模式
 		if (((wh->i_fc[1] & IEEE80211_FC1_PWR_MGT) ^
 		    (ni->ni_flags & IEEE80211_NODE_PWR_MGT)))
 			ieee80211_node_pwrsave(ni,
@@ -265,7 +266,7 @@ ieee80211_input_data(struct ieee80211com *ic, struct mbuf **mp,
 	 * crypto cipher modules used to do delayed update
 	 * of replay sequence numbers.
 	 */
-	if (wh->i_fc[1] & IEEE80211_FC1_WEP) {
+	if (wh->i_fc[1] & IEEE80211_FC1_WEP) { // 帧内容是否被加密
 		if ((ic->ic_flags & IEEE80211_F_PRIVACY) == 0) {
 			/*
 			 * Discard encrypted frames when privacy is off.
@@ -276,6 +277,7 @@ ieee80211_input_data(struct ieee80211com *ic, struct mbuf **mp,
 			IEEE80211_NODE_STAT(ni, rx_noprivacy);
 			goto out;
 		}
+		// 解密数据，然后返回 key
 		key = ieee80211_crypto_decap(ic, ni, &m, hdrspace);
 		if (key == NULL) {
 			/* NB: stats+msgs handled in crypto_decap */
@@ -314,7 +316,7 @@ ieee80211_input_data(struct ieee80211com *ic, struct mbuf **mp,
 
 	/*
 	 * Finally, strip the 802.11 header.
-	 */
+	 */ // 去掉数据头
 	m = ieee80211_decap(m, hdrspace);
 	if (m == NULL) {
 		/* don't count Null data frames as errors */
@@ -559,6 +561,7 @@ ieee80211_input(struct ieee80211com *ic, struct mbuf *m,
 	 */
 	wh = mtod(m, struct ieee80211_frame *);
 
+	// 校验 Protocol Version
 	if ((wh->i_fc[0] & IEEE80211_FC0_VERSION_MASK) !=
 	    IEEE80211_FC0_VERSION_0) {
 		IEEE80211_DISCARD_MAC(ic, IEEE80211_MSG_ANY,
@@ -567,16 +570,17 @@ ieee80211_input(struct ieee80211com *ic, struct mbuf *m,
 		goto err;
 	}
 
-	dir = wh->i_fc[1] & IEEE80211_FC1_DIR_MASK;
-	type = wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
+	// 解析 frmae control 字段，获取帧的类型和方向
+	dir = wh->i_fc[1] & IEEE80211_FC1_DIR_MASK; // 方向是 TO DS 和 From DS 的组合
+	type = wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK; // 帧类型：数据帧，管理帧，控制帧
 
-	if ((ic->ic_flags & IEEE80211_F_SCAN) == 0) {
+	if ((ic->ic_flags & IEEE80211_F_SCAN) == 0) { // 非扫描状态下
 		u_int8_t *bssid;
 
 		switch (ic->ic_opmode) {
 		case IEEE80211_M_STA:
 			bssid = wh->i_addr2;
-			if (!IEEE80211_ADDR_EQ(bssid, ni->ni_bssid)) {
+			if (!IEEE80211_ADDR_EQ(bssid, ni->ni_bssid)) { // BSSID 是否和网卡的 node 一致
 				/* not interested in */
 				IEEE80211_DISCARD_MAC(ic, IEEE80211_MSG_INPUT,
 				    bssid, NULL, "node %s, %s",
@@ -665,7 +669,7 @@ ieee80211_input(struct ieee80211com *ic, struct mbuf *m,
 			goto out;
 		}
 
-		ni->ni_rssi = rssi;
+		ni->ni_rssi = rssi; // 更新节点的连接信号强度
 		ni->ni_rstamp = rstamp;
 
 		if (HAS_SEQ(type) && (ic->ic_opmode != IEEE80211_M_STA ||
@@ -724,6 +728,7 @@ ieee80211_input(struct ieee80211com *ic, struct mbuf *m,
 
 	switch (type) {
 	case IEEE80211_FC0_TYPE_DATA:
+		// 接收到的是数据帧
 		ret = ieee80211_input_data(ic, &m, ni);
 		if (ret == -1) {
 			goto out;
@@ -739,6 +744,7 @@ ieee80211_input(struct ieee80211com *ic, struct mbuf *m,
 		return IEEE80211_FC0_TYPE_MGT;
 
 	case IEEE80211_FC0_TYPE_CTL:
+		// 接收到的是控制帧
 		ieee80211_input_control(ic, m, ni);
 		goto out;
 
@@ -934,6 +940,7 @@ ieee80211_deliver_data(struct ieee80211com *ic,
 		 * we have to change here too to use if_input.
 		 */
 		KASSERT(ifp->if_percpuq);
+		// 将数据发送给上层网络栈
 		if_percpuq_enqueue(ifp->if_percpuq, m);
 	}
 
