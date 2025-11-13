@@ -2426,7 +2426,8 @@ plcomcnattach(struct plcom_instance *pi, int rate, int frequency,
 
 	cn_tab = &plcomcons;
 	cn_init_magic(&plcom_cnm_state);
-	cn_set_magic("\047\001"); /* default magic is BREAK */
+	/* cn_set_magic("\047\001"); */ /* default magic is BREAK */
+	cn_set_magic("+++++");
 
 	plcomconsunit = unit;
 	plcomconsrate = rate;

@@ -29,9 +29,18 @@ options 	MULTIPROCESSOR
 pseudo-device 	openfirm	# /dev/openfirm
 
 #options 	DIAGNOSTIC	# internal consistency checks
-#options 	DEBUG
+options 	DEBUG
+options 	DDB
+options 	DDB_HISTORY_SIZE=100
+options 	DDB_ONPANIC=1
+options 	DDB_VERBOSE_HELP
+# options 	KGDB
+# options 	KGDB_DEVNAME="\"plcom\""	# device to use for KGDB
+# options 	KGDB_DEVADDR=0x2800e000	# at this address
+# options 	KGDB_DEVRATE=115200 # at this comm. rate
+makeoptions    DEBUG="-g"
 #options 	LOCKDEBUG
-#options 	VERBOSE_INIT_ARM # verbose bootstrapping messages
+options 	VERBOSE_INIT_ARM # verbose bootstrapping messages
 options 	INCLUDE_CONFIG_FILE
 #options 	UVMHIST		# kernhist for uvm/pmap subsystems
 #options 	UVMHIST_PRINT,KERNHIST_DELAY=0
