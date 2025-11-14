@@ -75,6 +75,13 @@
 		status = "disabled";
 	};
 
+	usb3_1: usb3@31a28000 {
+		compatible = "generic-xhci";
+		reg = <0x0 0x31a28000 0x0 0x18000>;
+		interrupts = <GIC_SPI 17 IRQ_TYPE_LEVEL_HIGH>;
+		status = "disabled";
+	};
+
 	macb0: ethernet@3200c000 {
 		compatible = "cdns,firefly";
 		reg = <0x0 0x3200c000 0x0 0x2000>;

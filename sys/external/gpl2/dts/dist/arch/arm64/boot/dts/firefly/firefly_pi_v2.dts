@@ -38,6 +38,18 @@
 	status = "okay";
 };
 
+&usb3_1 {
+	status = "okay";
+};
+
+&sata0 {
+	status = "okay";
+};
+
+&sata1 {
+	status = "okay";
+};
+
 &macb0 {
 	phy-mode = "sgmii";
 	use-mii;
